@@ -25,7 +25,9 @@ define('BASE_DIR',        __DIR__);
 define('DB_FILE',         __DIR__ . DIRECTORY_SEPARATOR . 'gastrolink.db');
 define('SLUG_PATTERN',    '/^[a-z0-9][a-z0-9_-]{1,49}$/');
 define('MAX_LOGO_BYTES',  700_000);   // ~512 KB base64
+define('MAX_COVER_BYTES', 1_500_000); // ~1 MB base64
 define('ALLOWED_COLORS',  ['green', 'burgundy', 'coffee', 'black', 'orange']);
+define('UPLOADS_DIR',     BASE_DIR . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'venues');
 
 // ── Database singleton ────────────────────────────────────────
 function getDB(): PDO {
@@ -71,9 +73,10 @@ function getDB(): PDO {
     ");
     // Non-destructive migrations for older DB files
     $migrations = [
-        "ALTER TABLE venues ADD COLUMN logo       TEXT    DEFAULT NULL",
-        "ALTER TABLE venues ADD COLUMN user_id    INTEGER DEFAULT 1",
-        "ALTER TABLE venues ADD COLUMN updated_at TEXT    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+        "ALTER TABLE venues ADD COLUMN logo         TEXT    DEFAULT NULL",
+        "ALTER TABLE venues ADD COLUMN cover_image  TEXT    DEFAULT NULL",
+        "ALTER TABLE venues ADD COLUMN user_id      INTEGER DEFAULT 1",
+        "ALTER TABLE venues ADD COLUMN updated_at   TEXT    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
         "ALTER TABLE venue_settings ADD COLUMN dark_mode_default INTEGER NOT NULL DEFAULT 0",
     ];
     foreach ($migrations as $sql) {
@@ -112,6 +115,14 @@ function getDB(): PDO {
         default_item_color     TEXT    NOT NULL DEFAULT '#FFFFFF',
         dark_mode_default      INTEGER NOT NULL DEFAULT 0
     )");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS scans (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        venue_slug TEXT    NOT NULL REFERENCES venues(slug) ON DELETE CASCADE,
+        user_agent TEXT    NOT NULL DEFAULT '',
+        created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    )");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_scans_venue_date ON scans(venue_slug, created_at)");
 
     return $pdo;
 }
@@ -190,6 +201,47 @@ function isValidUrl(?string $url): bool {
 function isValidColor(string $c): bool {
     return in_array($c, ALLOWED_COLORS, true)
         || (bool) preg_match('/^#[0-9a-fA-F]{6}$/', $c);
+}
+
+// ── Image file storage ────────────────────────────────────────
+function ensureUploadsDir(): void {
+    if (!is_dir(UPLOADS_DIR)) {
+        mkdir(UPLOADS_DIR, 0755, true);
+    }
+}
+
+function saveImageFile(string $base64, string $type): ?string {
+    if (!preg_match('/^data:image\/(jpeg|jpg|png|webp|gif);base64,/i', $base64, $m)) return null;
+    $ext  = strtolower($m[1] === 'jpeg' ? 'jpg' : $m[1]);
+    $data = base64_decode(preg_replace('/^data:image\/[a-zA-Z+]+;base64,/', '', $base64));
+    if (!$data) return null;
+    ensureUploadsDir();
+    $name = $type . '_' . uniqid('', true) . '.' . $ext;
+    $abs  = UPLOADS_DIR . DIRECTORY_SEPARATOR . $name;
+    if (file_put_contents($abs, $data) === false) return null;
+    return 'uploads/venues/' . $name;
+}
+
+function deleteImageFile(?string $relPath): void {
+    if (!$relPath || str_starts_with($relPath, 'data:')) return;
+    $abs = BASE_DIR . DIRECTORY_SEPARATOR . ltrim(str_replace('/', DIRECTORY_SEPARATOR, $relPath), DIRECTORY_SEPARATOR);
+    if (is_file($abs)) @unlink($abs);
+}
+
+function deleteVenueFiles(string $slug): void {
+    $st = getDB()->prepare("SELECT logo, cover_image FROM venues WHERE slug = ?");
+    $st->execute([$slug]);
+    $r = $st->fetch();
+    if ($r) {
+        deleteImageFile($r['logo']        ?? null);
+        deleteImageFile($r['cover_image'] ?? null);
+    }
+}
+
+function imgUrl(?string $val): string {
+    if (!$val) return '';
+    if (str_starts_with($val, 'data:')) return $val;
+    return url($val);
 }
 
 // ── Colour helpers ────────────────────────────────────────────

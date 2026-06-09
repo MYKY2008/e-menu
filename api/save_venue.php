@@ -32,6 +32,8 @@ try {
         $slug = sanitizeSlug((string)($payload['slug'] ?? ''));
         if (!preg_match(SLUG_PATTERN, $slug)) throw new InvalidArgumentException('Neplatný slug.');
 
+        deleteVenueFiles($slug);
+
         // Admin may delete any venue; user only their own
         if ($role === 'admin') {
             $db->prepare("DELETE FROM venues WHERE slug = ?")->execute([$slug]);
@@ -71,19 +73,56 @@ try {
     $goog  = trim($payload['google_url']    ?? '') ?: null;
     $insta = trim($payload['instagram_url'] ?? '') ?: null;
 
-    // Logo validation
+    $isNew = ($originalSlug === '');
+
+    // Fetch current image paths for cleanup on update
+    $currentLogo  = null;
+    $currentCover = null;
+    if (!$isNew) {
+        $stCur = $db->prepare("SELECT logo, cover_image FROM venues WHERE slug = ?");
+        $stCur->execute([$originalSlug ?: $slug]);
+        $cur = $stCur->fetch();
+        if ($cur) {
+            $currentLogo  = $cur['logo']        ?? null;
+            $currentCover = $cur['cover_image'] ?? null;
+        }
+    }
+
+    // ── Logo processing ───────────────────────────────────────
     $rawLogo = $payload['logo'] ?? null;
     if (!is_string($rawLogo) || $rawLogo === '') {
+        deleteImageFile($currentLogo);
         $logo = null;
-    } elseif (!preg_match('/^data:image\/(jpeg|png|webp|gif);base64,/i', $rawLogo)) {
-        $logo = null;
-    } elseif (strlen($rawLogo) > MAX_LOGO_BYTES) {
-        throw new InvalidArgumentException('Logo je príliš veľké (max. 512 KB).');
+    } elseif (str_starts_with($rawLogo, 'data:image')) {
+        if (strlen($rawLogo) > MAX_LOGO_BYTES) {
+            throw new InvalidArgumentException('Logo je príliš veľké (max. 512 KB).');
+        }
+        $savedPath = saveImageFile($rawLogo, 'logo');
+        if (!$savedPath) throw new InvalidArgumentException('Neplatný formát loga.');
+        deleteImageFile($currentLogo);
+        $logo = $savedPath;
     } else {
+        // Existing file path — keep as is
         $logo = $rawLogo;
     }
 
-    $isNew = ($originalSlug === '');
+    // ── Cover image processing ────────────────────────────────
+    $rawCover = $payload['cover_image'] ?? null;
+    if (!is_string($rawCover) || $rawCover === '') {
+        deleteImageFile($currentCover);
+        $cover = null;
+    } elseif (str_starts_with($rawCover, 'data:image')) {
+        if (strlen($rawCover) > MAX_COVER_BYTES) {
+            throw new InvalidArgumentException('Cover fotka je príliš veľká (max. 1 MB).');
+        }
+        $savedPath = saveImageFile($rawCover, 'cover');
+        if (!$savedPath) throw new InvalidArgumentException('Neplatný formát cover fotky.');
+        deleteImageFile($currentCover);
+        $cover = $savedPath;
+    } else {
+        // Existing file path — keep as is
+        $cover = $rawCover;
+    }
 
     // ── Venue limit check for new venues (non-admin users) ────
     if ($isNew && $role !== 'admin') {
@@ -126,29 +165,29 @@ try {
         }
         $db->prepare("UPDATE venues
             SET slug=:slug, name=:name, menu_url=:menu, google_url=:goog,
-                instagram_url=:insta, color=:color, logo=:logo,
+                instagram_url=:insta, color=:color, logo=:logo, cover_image=:cover,
                 updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
             WHERE slug=:orig")
            ->execute([
                ':slug'=>$slug, ':name'=>$name, ':menu'=>$menu,
                ':goog'=>$goog, ':insta'=>$insta, ':color'=>$color,
-               ':logo'=>$logo, ':orig'=>$originalSlug,
+               ':logo'=>$logo, ':cover'=>$cover, ':orig'=>$originalSlug,
            ]);
     } else {
         // Upsert (insert new or update same-slug)
         $ownerId = $isNew ? $userId : (int)($existing['user_id'] ?? $userId);
         $db->prepare("
-            INSERT INTO venues (slug, user_id, name, menu_url, google_url, instagram_url, color, logo)
-            VALUES (:slug, :uid, :name, :menu, :goog, :insta, :color, :logo)
+            INSERT INTO venues (slug, user_id, name, menu_url, google_url, instagram_url, color, logo, cover_image)
+            VALUES (:slug, :uid, :name, :menu, :goog, :insta, :color, :logo, :cover)
             ON CONFLICT(slug) DO UPDATE SET
                 name=excluded.name, menu_url=excluded.menu_url,
                 google_url=excluded.google_url, instagram_url=excluded.instagram_url,
-                color=excluded.color, logo=excluded.logo,
+                color=excluded.color, logo=excluded.logo, cover_image=excluded.cover_image,
                 updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
         ")->execute([
             ':slug'=>$slug, ':uid'=>$ownerId, ':name'=>$name,
             ':menu'=>$menu, ':goog'=>$goog, ':insta'=>$insta,
-            ':color'=>$color, ':logo'=>$logo,
+            ':color'=>$color, ':logo'=>$logo, ':cover'=>$cover,
         ]);
     }
 

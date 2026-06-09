@@ -1,21 +1,27 @@
 <!DOCTYPE html>
-<html lang="sk">
+<html lang="sk" class="">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — GastroLink QR</title>
+<!-- Anti-flash dark mode (zdieľa kľúč s celou aplikáciou) -->
+<script>(function(){if(localStorage.getItem('gl-dark')==='1')document.documentElement.classList.add('dark')})();</script>
+<!-- Inter font -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','sans-serif']}}}}</script>
+<style>*{-webkit-tap-highlight-color:transparent}</style>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 transition-colors duration-200">
 
 <?php
 $db = getDB();
 
-// Stats
 $totalUsers  = (int)$db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $totalVenues = (int)$db->query("SELECT COUNT(*) FROM venues")->fetchColumn();
 
-// All users with venue count
 $users = $db->query("
     SELECT u.id, u.username, u.role, u.venue_limit, u.created_at,
            COUNT(v.slug) AS venue_count
@@ -25,7 +31,6 @@ $users = $db->query("
     ORDER BY u.created_at DESC
 ")->fetchAll();
 
-// All venues with owner
 $venues = $db->query("
     SELECT v.slug, v.name, v.color, v.created_at, u.username AS owner
     FROM venues v
@@ -36,51 +41,92 @@ $venues = $db->query("
 $flash = getFlash();
 ?>
 
-<!-- Nav -->
-<nav class="bg-white shadow-sm px-6 py-3 flex items-center justify-between">
-  <span class="font-bold text-indigo-700 text-lg">GastroLink <span class="text-emerald-600">QR</span> <span class="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full ml-1">Admin</span></span>
-  <div class="flex items-center gap-4 text-sm">
-    <a href="<?= url('dashboard') ?>" class="text-indigo-600 hover:underline">Môj dashboard</a>
-    <a href="<?= url('logout') ?>" class="text-red-500 hover:underline">Odhlásiť</a>
+<!-- ── NAVBAR ──────────────────────────────────────────────────────── -->
+<nav class="bg-white/80 dark:bg-slate-950/80 backdrop-blur-lg sticky top-0 z-30
+            border-b border-gray-100 dark:border-slate-800 px-5 py-3
+            flex items-center justify-between">
+
+  <div class="flex items-center gap-3">
+    <span class="font-extrabold text-sm tracking-tight">
+      <span class="text-indigo-600">GastroLink</span><span class="text-emerald-500">QR</span>
+    </span>
+    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest
+                 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400">
+      Admin
+    </span>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <a href="<?= url('dashboard') ?>"
+       class="text-xs font-semibold px-3 py-1.5 rounded-xl
+              text-slate-600 dark:text-slate-400
+              hover:bg-gray-100 dark:hover:bg-slate-800
+              transition-all duration-200">
+      Dashboard
+    </a>
+    <!-- Dark mode toggle -->
+    <button id="dark-toggle" onclick="toggleDark()" aria-label="Prepnúť tmavý režim"
+            class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800
+                   flex items-center justify-center
+                   text-slate-500 dark:text-slate-400
+                   hover:bg-gray-200 dark:hover:bg-slate-700
+                   transition-all duration-200">
+      <span id="dark-icon" class="w-3.5 h-3.5 block pointer-events-none"></span>
+    </button>
+    <a href="<?= url('logout') ?>"
+       class="text-xs font-medium text-slate-500 dark:text-slate-400
+              hover:text-red-500 dark:hover:text-red-400 transition-colors">
+      Odhlásiť
+    </a>
   </div>
 </nav>
 
-<!-- Toast container -->
-<div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+<!-- Toast -->
+<div id="toast-container" class="fixed top-16 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-<div class="max-w-7xl mx-auto p-6 space-y-6">
+<div class="max-w-6xl mx-auto px-4 py-6 space-y-5">
 
   <!-- Flash -->
   <?php if ($flash): ?>
-  <div class="px-4 py-3 rounded-lg text-sm <?= $flash['type']==='success'?'bg-emerald-100 text-emerald-800':'bg-red-100 text-red-800' ?>">
+  <div class="px-4 py-3 rounded-2xl text-sm font-medium
+    <?= $flash['type']==='success'
+        ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+        : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' ?>">
     <?= e($flash['msg']) ?>
   </div>
   <?php endif; ?>
 
-  <!-- Stats -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+  <!-- ── Stats cards ──────────────────────────────────────────────── -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
     <?php
     $stats = [
-      ['Používatelia', $totalUsers, 'bg-indigo-50 text-indigo-700'],
-      ['Prevádzky',    $totalVenues, 'bg-emerald-50 text-emerald-700'],
+      ['👤', 'Používatelia', $totalUsers,  'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'],
+      ['🏪', 'Prevádzky',    $totalVenues, 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'],
     ];
-    foreach ($stats as [$label, $val, $cls]):
+    foreach ($stats as [$icon, $label, $val, $cls]):
     ?>
-    <div class="<?= $cls ?> rounded-2xl p-5 shadow-sm">
-      <p class="text-sm font-medium opacity-70"><?= $label ?></p>
-      <p class="text-3xl font-extrabold mt-1"><?= $val ?></p>
+    <div class="<?= $cls ?> rounded-[2rem] p-5 border border-gray-100 dark:border-slate-800 shadow-sm">
+      <p class="text-xl mb-1"><?= $icon ?></p>
+      <p class="text-xs font-semibold opacity-70 uppercase tracking-wide"><?= $label ?></p>
+      <p class="text-3xl font-extrabold tracking-tight mt-0.5"><?= $val ?></p>
     </div>
     <?php endforeach; ?>
   </div>
 
-  <!-- ── Users table ── -->
-  <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-      <h2 class="font-bold text-gray-700">Používatelia (<?= count($users) ?>)</h2>
+  <!-- ── Users table ──────────────────────────────────────────────── -->
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+      <h2 class="font-bold text-slate-900 dark:text-white">
+        Používatelia
+        <span class="ml-2 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-800
+                     text-slate-500 dark:text-slate-400 text-xs font-semibold">
+          <?= count($users) ?>
+        </span>
+      </h2>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+        <thead class="bg-gray-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">
           <tr>
             <th class="px-6 py-3 text-left">E-mail</th>
             <th class="px-6 py-3 text-left">Rola</th>
@@ -90,39 +136,49 @@ $flash = getFlash();
             <th class="px-6 py-3 text-right">Akcie</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100 dark:divide-slate-800">
         <?php foreach ($users as $u): ?>
           <?php $isSelf = ((int)$u['id'] === (int)$_SESSION['user_id']); ?>
-          <tr class="hover:bg-gray-50 transition" id="user-row-<?= $u['id'] ?>">
-            <td class="px-6 py-4 font-medium">
+          <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors" id="user-row-<?= $u['id'] ?>">
+            <td class="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">
               <?= e($u['username']) ?>
-              <?php if ($isSelf): ?><span class="ml-1 text-xs text-indigo-400">(vy)</span><?php endif; ?>
+              <?php if ($isSelf): ?>
+              <span class="ml-1 text-[10px] text-indigo-400 dark:text-indigo-500">(vy)</span>
+              <?php endif; ?>
             </td>
             <td class="px-6 py-4">
-              <span class="px-2 py-0.5 rounded-full text-xs font-semibold
-                <?= $u['role']==='admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600' ?>">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold
+                <?= $u['role']==='admin'
+                    ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                    : 'bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' ?>">
                 <?= $u['role'] ?>
               </span>
             </td>
-            <td class="px-6 py-4 text-gray-600"><?= $u['venue_count'] ?></td>
+            <td class="px-6 py-4 text-slate-500 dark:text-slate-400"><?= $u['venue_count'] ?></td>
             <td class="px-6 py-4">
               <input type="number" min="0" max="9999"
                 value="<?= (int)$u['venue_limit'] ?>"
-                class="w-20 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-300 outline-none"
+                class="w-20 bg-gray-100 dark:bg-slate-800 border-none rounded-xl
+                       px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100
+                       focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
                 onchange="updateLimit(<?= $u['id'] ?>, this.value)">
             </td>
-            <td class="px-6 py-4 text-gray-400 text-xs"><?= e(substr($u['created_at'],0,10)) ?></td>
+            <td class="px-6 py-4 text-slate-400 dark:text-slate-500 text-xs">
+              <?= e(substr($u['created_at'],0,10)) ?>
+            </td>
             <td class="px-6 py-4 text-right">
               <div class="flex justify-end gap-2">
                 <button onclick="resetPassword(<?= $u['id'] ?>,'<?= e($u['username']) ?>')"
-                  title="Reset hesla"
-                  class="px-3 py-1.5 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg font-medium transition">
+                  class="px-3 py-1.5 text-xs rounded-xl font-semibold transition-all duration-200 active:scale-95
+                         bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 dark:hover:bg-amber-900/50
+                         text-amber-800 dark:text-amber-300">
                   Heslo
                 </button>
                 <?php if (!$isSelf): ?>
                 <button onclick="deleteUser(<?= $u['id'] ?>,'<?= e($u['username']) ?>')"
-                  title="Zmazať účet"
-                  class="px-3 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-medium transition">
+                  class="px-3 py-1.5 text-xs rounded-xl font-semibold transition-all duration-200 active:scale-95
+                         bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50
+                         text-red-700 dark:text-red-400">
                   Zmazať
                 </button>
                 <?php endif; ?>
@@ -135,42 +191,52 @@ $flash = getFlash();
     </div>
   </div>
 
-  <!-- ── Venues table ── -->
-  <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-100">
-      <h2 class="font-bold text-gray-700">Všetky prevádzky (<?= count($venues) ?>)</h2>
+  <!-- ── Venues table ─────────────────────────────────────────────── -->
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100 dark:border-slate-800">
+      <h2 class="font-bold text-slate-900 dark:text-white">
+        Všetky prevádzky
+        <span class="ml-2 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-800
+                     text-slate-500 dark:text-slate-400 text-xs font-semibold">
+          <?= count($venues) ?>
+        </span>
+      </h2>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+        <thead class="bg-gray-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">
           <tr>
-            <th class="px-6 py-3 text-left">Slug</th>
+            <th class="px-6 py-3 text-left">Slug / Link</th>
             <th class="px-6 py-3 text-left">Názov</th>
             <th class="px-6 py-3 text-left">Vlastník</th>
             <th class="px-6 py-3 text-left">Vytvorená</th>
             <th class="px-6 py-3 text-right">Akcie</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100 dark:divide-slate-800">
         <?php foreach ($venues as $v):
           $c = resolveColor($v['color']);
         ?>
-          <tr class="hover:bg-gray-50 transition" id="venue-row-<?= e($v['slug']) ?>">
+          <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors" id="venue-row-<?= e($v['slug']) ?>">
             <td class="px-6 py-4">
               <span class="flex items-center gap-2">
-                <span class="w-3 h-3 rounded-full" style="background:<?= e($c['hex']) ?>"></span>
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:<?= e($c['hex']) ?>"></span>
                 <a href="<?= url('r/' . $v['slug']) ?>" target="_blank"
-                  class="text-indigo-600 hover:underline font-mono text-xs">
+                   class="text-indigo-600 dark:text-indigo-400 hover:underline font-mono text-xs">
                   /r/<?= e($v['slug']) ?>
                 </a>
               </span>
             </td>
-            <td class="px-6 py-4 font-medium"><?= e($v['name']) ?></td>
-            <td class="px-6 py-4 text-gray-500"><?= e($v['owner']) ?></td>
-            <td class="px-6 py-4 text-gray-400 text-xs"><?= e(substr($v['created_at'],0,10)) ?></td>
+            <td class="px-6 py-4 font-medium text-slate-900 dark:text-slate-100"><?= e($v['name']) ?></td>
+            <td class="px-6 py-4 text-slate-500 dark:text-slate-400"><?= e($v['owner']) ?></td>
+            <td class="px-6 py-4 text-slate-400 dark:text-slate-500 text-xs">
+              <?= e(substr($v['created_at'],0,10)) ?>
+            </td>
             <td class="px-6 py-4 text-right">
               <button onclick="adminDeleteVenue('<?= e($v['slug']) ?>','<?= e($v['name']) ?>')"
-                class="px-3 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-medium transition">
+                class="px-3 py-1.5 text-xs rounded-xl font-semibold transition-all duration-200 active:scale-95
+                       bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50
+                       text-red-700 dark:text-red-400">
                 Zmazať
               </button>
             </td>
@@ -183,20 +249,29 @@ $flash = getFlash();
 
 </div>
 
-<!-- Password reset modal -->
-<div id="pw-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
-    <h3 class="font-bold text-lg mb-1">Reset hesla</h3>
-    <p class="text-sm text-gray-500 mb-4">Účet: <span id="pw-username" class="font-medium text-gray-700"></span></p>
+<!-- ── Password reset modal ─────────────────────────────────────── -->
+<div id="pw-modal" class="hidden fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-gray-100 dark:border-slate-800 p-7 w-full max-w-sm">
+    <h3 class="font-bold text-lg text-slate-900 dark:text-white mb-1">Reset hesla</h3>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mb-5">
+      Účet: <span id="pw-username" class="font-semibold text-slate-700 dark:text-slate-200"></span>
+    </p>
     <input id="pw-new" type="password" placeholder="Nové heslo (min. 8 znakov)" minlength="8"
-      class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4">
+      class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl
+             px-4 py-3 text-sm text-slate-900 dark:text-slate-100
+             placeholder-slate-400 dark:placeholder-slate-500
+             focus:outline-none focus:ring-2 focus:ring-indigo-500
+             transition-all duration-200 mb-5">
     <div class="flex gap-3">
       <button onclick="submitReset()"
-        class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg text-sm transition">
+        class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold
+               py-3 rounded-2xl text-sm transition-all duration-200 active:scale-95">
         Nastaviť heslo
       </button>
-      <button onclick="closeModal()"
-        class="px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg text-sm transition">
+      <button onclick="closePwModal()"
+        class="px-5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
+               text-slate-700 dark:text-slate-300 font-semibold
+               py-3 rounded-2xl text-sm transition-all duration-200">
         Zrušiť
       </button>
     </div>
@@ -207,7 +282,6 @@ $flash = getFlash();
 const CSRF    = <?= json_encode(csrfToken()) ?>;
 const API_URL = <?= json_encode(url('api/admin_actions.php')) ?>;
 
-// ── API call helper ───────────────────────────────────────────
 async function adminApi(payload) {
   const res = await fetch(API_URL, {
     method: 'POST',
@@ -217,18 +291,14 @@ async function adminApi(payload) {
   return res.json();
 }
 
-// ── Update limit ──────────────────────────────────────────────
 async function updateLimit(userId, limit) {
   try {
     const data = await adminApi({ action: 'update_limit', user_id: userId, venue_limit: parseInt(limit) });
     if (data.ok) toast('Limit aktualizovaný.', 'success');
     else toast(data.error || 'Chyba.', 'error');
-  } catch (e) {
-    toast('Sieťová chyba.', 'error');
-  }
+  } catch { toast('Sieťová chyba.', 'error'); }
 }
 
-// ── Delete user ───────────────────────────────────────────────
 async function deleteUser(userId, username) {
   if (!confirm(`Naozaj zmazať účet "${username}" a všetky jeho prevádzky?`)) return;
   try {
@@ -236,15 +306,10 @@ async function deleteUser(userId, username) {
     if (data.ok) {
       toast('Účet zmazaný.', 'success');
       document.getElementById('user-row-' + userId)?.remove();
-    } else {
-      toast(data.error || 'Chyba.', 'error');
-    }
-  } catch (e) {
-    toast('Sieťová chyba.', 'error');
-  }
+    } else toast(data.error || 'Chyba.', 'error');
+  } catch { toast('Sieťová chyba.', 'error'); }
 }
 
-// ── Delete venue (admin) ──────────────────────────────────────
 async function adminDeleteVenue(slug, name) {
   if (!confirm(`Naozaj zmazať prevádzku "${name}"?`)) return;
   try {
@@ -252,15 +317,10 @@ async function adminDeleteVenue(slug, name) {
     if (data.ok) {
       toast('Prevádzka zmazaná.', 'success');
       document.getElementById('venue-row-' + slug)?.remove();
-    } else {
-      toast(data.error || 'Chyba.', 'error');
-    }
-  } catch (e) {
-    toast('Sieťová chyba.', 'error');
-  }
+    } else toast(data.error || 'Chyba.', 'error');
+  } catch { toast('Sieťová chyba.', 'error'); }
 }
 
-// ── Password reset modal ──────────────────────────────────────
 let _pwUserId = null;
 function resetPassword(userId, username) {
   _pwUserId = userId;
@@ -268,7 +328,7 @@ function resetPassword(userId, username) {
   document.getElementById('pw-new').value = '';
   document.getElementById('pw-modal').classList.remove('hidden');
 }
-function closeModal() {
+function closePwModal() {
   document.getElementById('pw-modal').classList.add('hidden');
   _pwUserId = null;
 }
@@ -277,27 +337,37 @@ async function submitReset() {
   if (pass.length < 8) { toast('Heslo musí mať aspoň 8 znakov.', 'error'); return; }
   try {
     const data = await adminApi({ action: 'reset_password', user_id: _pwUserId, password: pass });
-    if (data.ok) { toast('Heslo zmenené.', 'success'); closeModal(); }
+    if (data.ok) { toast('Heslo zmenené.', 'success'); closePwModal(); }
     else toast(data.error || 'Chyba.', 'error');
-  } catch (e) {
-    toast('Sieťová chyba.', 'error');
-  }
+  } catch { toast('Sieťová chyba.', 'error'); }
 }
 
-// Close modal on backdrop click
 document.getElementById('pw-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
+  if (e.target === this) closePwModal();
 });
 
-// ── Toast ─────────────────────────────────────────────────────
 function toast(msg, type = 'info') {
   const el = document.createElement('div');
-  const bg  = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-red-600' : 'bg-gray-700';
-  el.className = `pointer-events-auto px-5 py-3 rounded-xl text-white text-sm font-medium shadow-lg ${bg}`;
+  const bg = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-red-600' : 'bg-slate-800';
+  el.className = `pointer-events-auto px-5 py-3 rounded-2xl text-white text-sm font-semibold shadow-xl ${bg}`;
   el.textContent = msg;
   document.getElementById('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 3500);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3200);
 }
+
+// ── Dark mode (zdieľa kľúč 'gl-dark' s celou aplikáciou) ──────────
+const SVG_SUN  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
+const SVG_MOON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+
+function toggleDark() {
+  const on = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('gl-dark', on ? '1' : '0');
+  document.getElementById('dark-icon').innerHTML = on ? SVG_MOON : SVG_SUN;
+}
+(function() {
+  const on = document.documentElement.classList.contains('dark');
+  document.getElementById('dark-icon').innerHTML = on ? SVG_MOON : SVG_SUN;
+})();
 </script>
 </body>
 </html>

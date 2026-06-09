@@ -13,12 +13,24 @@ $venue = $vSt->fetch();
 
 if (!$venue) {
     http_response_code(404);
-    echo '<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8"><title>Nenájdené</title></head>'
-       . '<body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc">'
-       . '<div style="text-align:center"><p style="font-size:3rem">🔍</p>'
-       . '<h1 style="font-size:1.25rem;color:#1e293b">Prevádzka neexistuje</h1>'
-       . '<a href="/" style="color:#6366f1;font-size:.875rem">← Späť na úvod</a></div></body></html>';
+    echo '<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8"><title>Nenájdené</title>'
+       . '<script src="https://cdn.tailwindcss.com"></script></head>'
+       . '<body class="min-h-screen flex items-center justify-center bg-gray-50">'
+       . '<div class="text-center"><p class="text-5xl mb-4">🔍</p>'
+       . '<h1 class="text-xl font-bold text-gray-900">Prevádzka neexistuje</h1>'
+       . '<a href="/" class="text-indigo-600 text-sm mt-3 block hover:underline">← Späť na úvod</a>'
+       . '</div></body></html>';
     exit;
+}
+
+// Scan tracking — once per hour per venue per session
+$scanKey = 'scan_ts_' . $slug;
+if (time() - (int)($_SESSION[$scanKey] ?? 0) > 3600) {
+    try {
+        $ua = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 512);
+        $db->prepare("INSERT INTO scans (venue_slug, user_agent) VALUES (?, ?)")->execute([$slug, $ua]);
+        $_SESSION[$scanKey] = time();
+    } catch (Throwable $ignored) {}
 }
 
 // Categories + items
@@ -49,13 +61,12 @@ $accentArr  = resolveColor($venue['color']);
 $accentHex  = $accentArr['hex'];
 $accentText = menuTextColor($accentHex);
 
-$accentIsLight  = ($accentText === '#1e293b');
-$accentOverlay  = $accentIsLight ? 'rgba(0,0,0,.1)'  : 'rgba(255,255,255,.2)';
-$accentOverlayH = $accentIsLight ? 'rgba(0,0,0,.16)' : 'rgba(255,255,255,.3)';
-
 $darkDefault = (int)($settings['dark_mode_default'] ?? 0);
 $defCatBg    = $settings['default_category_color'] ?? '#1E3A5F';
 $defItemBg   = $settings['default_item_color']     ?? '#FFFFFF';
+
+// First letter avatar fallback
+$initial = mb_strtoupper(mb_substr($venue['name'], 0, 1));
 
 $quickActions = [];
 if (!empty($venue['google_url']))    $quickActions[] = ['url'=>$venue['google_url'],    'emoji'=>'⭐','label'=>'Google'];
@@ -83,11 +94,11 @@ $AL = [
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
-<meta name="theme-color" content="<?= e($accentHex) ?>">
+<meta name="theme-color" content="#ffffff">
 <meta name="description" content="Jedálny lístok — <?= e($venue['name']) ?>">
 <title><?= e($venue['name']) ?> — Menu</title>
 
-<!-- Anti-flash: set dark class BEFORE any render -->
+<!-- Anti-flash: set dark class before any render -->
 <script>
 (function(){
   var s=localStorage.getItem('gl-dark'),d=<?= $darkDefault ?>;
@@ -95,113 +106,200 @@ $AL = [
 })();
 </script>
 
+<!-- Inter font -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
-<script>tailwind.config={darkMode:'class'}</script>
+<script>tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','sans-serif']}}}}</script>
 
 <style>
 *,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth}
 
-/* Safe-area insets (iPhone notch) */
 .pt-safe{padding-top:max(1.25rem,env(safe-area-inset-top))}
 .pb-safe{padding-bottom:max(1.5rem,env(safe-area-inset-bottom))}
 
-/* Hide scrollbar */
 .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
 .no-scrollbar::-webkit-scrollbar{display:none}
 
-/* Bottom sheet slide-up animation */
+/* Bottom sheet */
 .sheet{
   transform:translateX(-50%) translateY(105%);
   transition:transform .38s cubic-bezier(.32,.72,0,1);
 }
 .sheet.open{transform:translateX(-50%) translateY(0)}
 
-/* Sheet overlay fade */
 .overlay{opacity:0;pointer-events:none;transition:opacity .3s ease}
 .overlay.open{opacity:1;pointer-events:auto}
 
-/* Sticky nav active pill */
-.cat-pill{transition:background .2s,color .2s,box-shadow .2s}
+/* Active category pill */
+.cat-pill{transition:all .2s}
 .cat-pill.active{
   background:<?= e($accentHex) ?> !important;
   color:<?= e($accentText) ?> !important;
 }
 
-/* Line-clamp polyfill */
+/* View transitions */
+@keyframes viewFadeIn{
+  from{opacity:0;transform:translateY(8px)}
+  to  {opacity:1;transform:translateY(0)}
+}
+.view-animate{animation:viewFadeIn .22s cubic-bezier(.32,.72,0,1) both}
+
 .clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
-/* Desktop: show gray margin around the "phone" */
+/* Desktop: show the app as a phone-like widget */
 @media(min-width:30rem){
-  body{background:#cbd5e1}
+  body{background:#f1f5f9}
   html.dark body{background:#020617}
 }
 </style>
 </head>
-<body class="bg-white dark:bg-slate-950 min-h-screen">
+<body class="bg-gray-50 dark:bg-slate-950 min-h-screen">
 
-<!-- ══ APP SHELL ═══════════════════════════════════════════════════ -->
+<!-- ══ APP SHELL ══════════════════════════════════════════════════ -->
 <div id="app"
      class="w-full max-w-md mx-auto min-h-screen
-            bg-white dark:bg-slate-900 shadow-2xl
-            relative flex flex-col">
+            bg-gray-50 dark:bg-slate-950 shadow-2xl relative flex flex-col">
 
-  <!-- ── HEADER ──────────────────────────────────────────────────── -->
-  <header class="flex-shrink-0" style="background:<?= e($accentHex) ?>">
-    <div class="pt-safe px-4 pb-5">
+  <!-- ── HEADER ────────────────────────────────────────────────────── -->
+  <?php $hasCover = !empty($venue['cover_image']); ?>
+  <header class="flex-shrink-0">
 
-      <div class="flex items-start justify-between gap-3 mt-1">
-        <div class="flex-1 min-w-0">
+    <?php if ($hasCover): ?>
+    <!-- ── COVER PHOTO variant: fotka ako pozadie celého headera ── -->
+    <div class="relative overflow-hidden border-b border-gray-100 dark:border-slate-800"
+         style="min-height:220px">
+
+      <!-- Cover photo — full background -->
+      <img src="<?= e(imgUrl($venue['cover_image'])) ?>" alt=""
+           class="absolute inset-0 w-full h-full object-cover">
+
+      <!-- Gradient overlay for readability -->
+      <div class="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/65 pointer-events-none"></div>
+
+      <!-- Dark mode toggle top-right -->
+      <button onclick="toggleDark()" aria-label="Prepnúť tmavý/svetlý režim"
+              class="absolute top-3 right-3 z-20
+                     w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm
+                     border border-white/20 shadow
+                     flex items-center justify-center text-white
+                     transition-all duration-200 active:scale-90">
+        <span id="dark-icon" class="w-3.5 h-3.5 block"></span>
+      </button>
+
+      <!-- Content over the image -->
+      <div class="relative z-10 pt-safe px-6 pb-6 flex flex-col items-center text-center">
+        <div class="mt-4 mb-4">
           <?php if (!empty($venue['logo'])): ?>
-          <img src="<?= e($venue['logo']) ?>" alt="Logo"
-               class="w-11 h-11 object-contain rounded-xl mb-3 shadow-md"
-               style="outline:2px solid <?= $accentOverlayH ?>">
+          <div class="w-20 h-20 rounded-full overflow-hidden
+                      ring-4 ring-white/80 shadow-xl border-2 border-white/60">
+            <img src="<?= e(imgUrl($venue['logo'])) ?>" alt="Logo" class="w-full h-full object-cover">
+          </div>
+          <?php else: ?>
+          <div class="w-20 h-20 rounded-full shadow-xl
+                      flex items-center justify-center text-3xl font-extrabold
+                      ring-4 ring-white/40 border-2 border-white/40"
+               style="background:<?= e($accentHex) ?>;color:<?= e($accentText) ?>">
+            <?= e($initial) ?>
+          </div>
           <?php endif; ?>
-          <h1 class="text-2xl font-extrabold leading-tight tracking-tight"
-              style="color:<?= e($accentText) ?>"><?= e($venue['name']) ?></h1>
         </div>
 
-        <!-- Sun / Moon toggle -->
-        <button id="dark-btn" onclick="toggleDark()" aria-label="Prepnúť tmavý režim"
-                class="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center
-                       transition active:scale-90"
-                style="background:<?= $accentOverlay ?>;color:<?= e($accentText) ?>">
-          <span id="dark-icon" class="w-4.5 h-4.5 block"></span>
-        </button>
-      </div>
+        <h1 class="text-2xl font-bold text-white leading-tight drop-shadow">
+          <?= e($venue['name']) ?>
+        </h1>
 
-      <!-- Quick actions: Google + Instagram only -->
-      <?php if (!empty($quickActions)): ?>
-      <div class="flex flex-wrap gap-2 mt-4">
-        <?php foreach ($quickActions as $qa): ?>
-        <a href="<?= e($qa['url']) ?>" target="_blank" rel="noopener noreferrer"
-           class="flex items-center gap-1.5 px-3 py-1.5 rounded-full
-                  text-xs font-semibold transition active:scale-95"
-           style="background:<?= $accentOverlay ?>;color:<?= e($accentText) ?>">
-          <span aria-hidden="true"><?= $qa['emoji'] ?></span>
-          <span><?= e($qa['label']) ?></span>
-        </a>
-        <?php endforeach; ?>
+        <?php if (!empty($quickActions)): ?>
+        <div class="flex flex-wrap justify-center gap-2 mt-3">
+          <?php foreach ($quickActions as $qa): ?>
+          <a href="<?= e($qa['url']) ?>" target="_blank" rel="noopener noreferrer"
+             class="flex items-center gap-1.5 px-4 py-1.5 rounded-full
+                    bg-white/20 backdrop-blur-sm text-white border border-white/30
+                    text-xs font-semibold hover:bg-white/30
+                    transition-all duration-200 active:scale-95">
+            <span aria-hidden="true"><?= $qa['emoji'] ?></span>
+            <span><?= e($qa['label']) ?></span>
+          </a>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
       </div>
-      <?php endif; ?>
     </div>
+
+    <?php else: ?>
+    <!-- ── NO COVER: avatar-style header ───────────────────────── -->
+    <div class="relative bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
+
+      <!-- Dark mode toggle top-right -->
+      <button onclick="toggleDark()" aria-label="Prepnúť tmavý/svetlý režim"
+              class="absolute top-3 right-3 z-10
+                     w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800
+                     border border-gray-200 dark:border-slate-600 shadow-sm
+                     flex items-center justify-center
+                     text-gray-500 dark:text-slate-400
+                     transition-all duration-200 active:scale-90">
+        <span id="dark-icon" class="w-3.5 h-3.5 block"></span>
+      </button>
+
+      <div class="pt-safe px-6 pb-6 flex flex-col items-center text-center">
+        <div class="mt-3 mb-4">
+          <?php if (!empty($venue['logo'])): ?>
+          <div class="w-20 h-20 rounded-full overflow-hidden
+                      ring-4 ring-white dark:ring-slate-900
+                      shadow-lg border-2 border-gray-100 dark:border-slate-700">
+            <img src="<?= e(imgUrl($venue['logo'])) ?>" alt="Logo" class="w-full h-full object-cover">
+          </div>
+          <?php else: ?>
+          <div class="w-20 h-20 rounded-full
+                      ring-4 ring-white dark:ring-slate-900
+                      shadow-lg flex items-center justify-center text-3xl font-extrabold"
+               style="background:<?= e($accentHex) ?>;color:<?= e($accentText) ?>">
+            <?= e($initial) ?>
+          </div>
+          <?php endif; ?>
+        </div>
+
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white leading-tight">
+          <?= e($venue['name']) ?>
+        </h1>
+
+        <?php if (!empty($quickActions)): ?>
+        <div class="flex flex-wrap justify-center gap-2 mt-3">
+          <?php foreach ($quickActions as $qa): ?>
+          <a href="<?= e($qa['url']) ?>" target="_blank" rel="noopener noreferrer"
+             class="flex items-center gap-1.5 px-4 py-1.5 rounded-full
+                    bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300
+                    text-xs font-semibold hover:bg-gray-200 dark:hover:bg-slate-700
+                    transition-all duration-200 active:scale-95">
+            <span aria-hidden="true"><?= $qa['emoji'] ?></span>
+            <span><?= e($qa['label']) ?></span>
+          </a>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+
   </header>
 
-  <!-- ── STICKY CATEGORY NAV ─────────────────────────────────────── -->
+  <!-- ── STICKY CATEGORY NAV (domovský stav) ───────────────────────── -->
   <?php if (!empty($categories)): ?>
   <nav id="cat-nav"
        class="sticky top-0 z-40 flex-shrink-0
-              bg-white/90 dark:bg-slate-900/90
-              backdrop-blur-md
-              border-b border-slate-100 dark:border-slate-800">
-    <div class="flex gap-1 overflow-x-auto no-scrollbar px-3 py-2.5">
+              bg-white/90 dark:bg-slate-900/90 backdrop-blur-md
+              border-b border-gray-100 dark:border-slate-800">
+    <div class="flex gap-1.5 overflow-x-auto no-scrollbar px-4 py-3">
       <?php foreach ($categories as $cat): ?>
-      <button onclick="scrollToSection(<?= (int)$cat['id'] ?>)"
+      <button onclick="showCategory(<?= (int)$cat['id'] ?>, '<?= e(addslashes($cat['name'])) ?>')"
               id="pill-<?= (int)$cat['id'] ?>"
-              class="cat-pill flex-none px-3.5 py-1.5 rounded-full text-xs
-                     font-semibold whitespace-nowrap
-                     text-slate-500 dark:text-slate-400
-                     hover:bg-slate-100 dark:hover:bg-slate-800">
+              class="cat-pill flex-none px-3.5 py-1.5 rounded-full
+                     text-xs font-semibold whitespace-nowrap
+                     text-gray-500 dark:text-gray-400
+                     hover:bg-gray-100 dark:hover:bg-slate-800
+                     transition-all duration-200">
         <?= e($cat['icon']) ?> <?= e($cat['name']) ?>
       </button>
       <?php endforeach; ?>
@@ -209,201 +307,251 @@ html{scroll-behavior:smooth}
   </nav>
   <?php endif; ?>
 
-  <!-- ── FEATURED STRIP ──────────────────────────────────────────── -->
-  <?php if (!empty($settings['show_featured']) && !empty($featuredItems)): ?>
-  <section class="flex-shrink-0 px-4 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
-    <h2 class="text-[10px] font-black uppercase tracking-[.14em] mb-3
-               text-slate-400 dark:text-slate-500">⭐ Odporúčame</h2>
-    <div class="flex gap-3 overflow-x-auto no-scrollbar pb-1">
-      <?php foreach ($featuredItems as $fi):
-        $fbg = $fi['bg_color'] ?: $defItemBg;
-        $ftc = menuTextColor($fbg);
-        $fpr = number_format((float)$fi['price'], 2, ',', '');
-      ?>
-      <button onclick='openSheet(<?= json_encode($fi, JSON_HEX_APOS | JSON_UNESCAPED_UNICODE) ?>)'
-              class="flex-none w-36 rounded-2xl p-3.5 text-left shadow-sm
-                     active:scale-95 transition-transform"
-              style="background:<?= e($fbg) ?>">
-        <p class="font-bold text-sm leading-snug clamp2 mb-2.5"
-           style="color:<?= e($ftc) ?>"><?= e($fi['name']) ?></p>
-        <span class="inline-block text-xs font-extrabold px-2 py-1 rounded-lg"
-              style="background:<?= e($accentHex) ?>;color:<?= e($accentText) ?>">
-          <?= $fpr ?> €
-        </span>
-      </button>
-      <?php endforeach; ?>
+  <!-- ── BACK BAR (kategória stav) ──────────────────────────────────── -->
+  <div id="back-bar"
+       style="display:none"
+       class="sticky top-0 z-40 flex-shrink-0
+              bg-white/90 dark:bg-slate-900/90 backdrop-blur-md
+              border-b border-gray-100 dark:border-slate-800 px-4 py-3
+              flex items-center gap-3">
+    <button onclick="showHome()"
+            class="flex items-center gap-1.5 text-sm font-bold
+                   text-indigo-600 dark:text-indigo-400
+                   active:scale-95 transition-all duration-200 flex-shrink-0">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Späť
+    </button>
+    <span class="w-px h-4 bg-gray-200 dark:bg-slate-700 flex-shrink-0"></span>
+    <span id="back-cat-name"
+          class="text-sm font-bold text-gray-900 dark:text-white truncate"></span>
+  </div>
+
+  <!-- ══ HOME VIEW (Odporúčame) ════════════════════════════════════════ -->
+  <div id="home-view" class="flex-1 flex flex-col">
+
+    <?php if (!empty($settings['show_featured']) && !empty($featuredItems)): ?>
+    <!-- Featured horizontal cards -->
+    <section class="bg-white dark:bg-slate-900 px-4 pt-5 pb-4
+                    border-b border-gray-100 dark:border-slate-800">
+      <h2 class="text-[10px] font-black uppercase tracking-[.15em] mb-3
+                 text-gray-400 dark:text-slate-500">⭐ Odporúčame</h2>
+      <div class="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+        <?php foreach ($featuredItems as $fi):
+          $fbg = $fi['bg_color'] ?: $defItemBg;
+          $fbgIsWhite = in_array($fbg, ['#FFFFFF','#FFF8E7','#F2ECD9'], true);
+          $ftc = menuTextColor($fbg);
+          $fpr = number_format((float)$fi['price'], 2, ',', '');
+        ?>
+        <button onclick='openSheet(<?= json_encode($fi, JSON_HEX_APOS | JSON_UNESCAPED_UNICODE) ?>)'
+                class="flex-none w-36 rounded-[2rem] p-4 text-left shadow-sm
+                       border border-gray-100 dark:border-slate-700
+                       hover:shadow-md active:scale-95 transition-all duration-200
+                       <?= $fbgIsWhite ? 'bg-white dark:bg-slate-800' : '' ?>"
+                <?= !$fbgIsWhite ? "style=\"background:{$fbg}\"" : '' ?>>
+          <p class="font-semibold text-sm leading-snug clamp2 mb-3
+                    <?= $fbgIsWhite ? 'text-gray-800 dark:text-gray-100' : '' ?>"
+             <?= !$fbgIsWhite ? "style=\"color:{$ftc}\"" : '' ?>>
+            <?= e($fi['name']) ?>
+          </p>
+          <span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full
+                       bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-gray-100">
+            <?= $fpr ?> €
+          </span>
+        </button>
+        <?php endforeach; ?>
+      </div>
+    </section>
+    <?php endif; ?>
+
+    <!-- Category list -->
+    <?php if (!empty($categories)): ?>
+    <div class="flex-1 overflow-y-auto">
+      <p class="text-[10px] font-black uppercase tracking-[.15em] px-4 pt-5 pb-3
+                text-gray-400 dark:text-slate-500">Kategórie</p>
+      <div class="px-4 space-y-2 pb-6">
+        <?php foreach ($categories as $cat):
+          $catBg = $cat['bg_color'] ?: $defCatBg;
+          $catTc = menuTextColor($catBg);
+          $catMt = menuMutedColor($catBg);
+          $itemCount = count($cat['items']);
+        ?>
+        <button onclick="showCategory(<?= (int)$cat['id'] ?>, '<?= e(addslashes($cat['name'])) ?>')"
+                class="w-full text-left rounded-[2rem] px-5 py-4
+                       shadow-sm hover:shadow-md active:scale-[.98]
+                       transition-all duration-200 flex items-center justify-between gap-3"
+                style="background:<?= e($catBg) ?>">
+          <div class="flex items-center gap-3 min-w-0">
+            <?php if (!empty($cat['icon'])): ?>
+            <span class="text-xl leading-none flex-shrink-0"><?= e($cat['icon']) ?></span>
+            <?php endif; ?>
+            <span class="font-bold text-sm truncate"
+                  style="color:<?= e($catTc) ?>"><?= e($cat['name']) ?></span>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="text-xs font-semibold"
+                  style="color:<?= e($catMt) ?>"><?= $itemCount ?> <?= $itemCount === 1 ? 'jedlo' : ($itemCount < 5 ? 'jedlá' : 'jedál') ?></span>
+            <svg class="w-4 h-4 opacity-60" viewBox="0 0 24 24" fill="none"
+                 stroke="<?= e($catTc) ?>" stroke-width="2.5"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </div>
+        </button>
+        <?php endforeach; ?>
+      </div>
     </div>
-  </section>
-  <?php endif; ?>
-
-  <!-- ── MENU SECTIONS ───────────────────────────────────────────── -->
-  <main class="flex-1 pb-safe">
-
-    <?php if (empty($categories)): ?>
-    <div class="flex flex-col items-center justify-center py-24 px-8 text-center">
+    <?php else: ?>
+    <div class="flex-1 flex flex-col items-center justify-center py-24 px-8 text-center">
       <p class="text-5xl mb-5">🍽️</p>
-      <h2 class="text-lg font-bold text-slate-700 dark:text-slate-300">
+      <h2 class="text-lg font-bold text-gray-700 dark:text-slate-300">
         Jedálny lístok sa pripravuje
       </h2>
-      <p class="text-sm text-slate-400 dark:text-slate-500 mt-2 leading-relaxed">
+      <p class="text-sm text-gray-400 dark:text-slate-500 mt-2 leading-relaxed">
         Táto prevádzka zatiaľ nezverejnila jedálny lístok.
       </p>
     </div>
+    <?php endif; ?>
 
-    <?php else: foreach ($categories as $catIdx => $cat):
-      $catBg  = $cat['bg_color'] ?: $defCatBg;
-      $catTc  = menuTextColor($catBg);
-      $catMut = menuMutedColor($catBg);
+  </div><!-- /#home-view -->
+
+  <!-- ══ CATEGORY VIEW (pre-rendered, všetky sekcie, hidden) ═══════════ -->
+  <div id="cat-views" class="hidden flex-1 pb-safe overflow-y-auto">
+    <?php foreach ($categories as $cat):
+      $catBg = $cat['bg_color'] ?: $defCatBg;
+      $catTc = menuTextColor($catBg);
     ?>
-    <section id="cat-<?= (int)$cat['id'] ?>"
-             class="<?= $catIdx > 0 ? 'mt-0.5' : '' ?>">
+    <section class="cat-section hidden" data-cat-id="<?= (int)$cat['id'] ?>">
 
-      <!-- Category header -->
-      <div class="px-4 py-3.5" style="background:<?= e($catBg) ?>">
-        <div class="flex items-center gap-2.5">
-          <?php if (!empty($cat['icon'])): ?>
-          <span class="text-xl leading-none" aria-hidden="true"><?= e($cat['icon']) ?></span>
-          <?php endif; ?>
-          <h2 class="font-extrabold text-base tracking-tight"
-              style="color:<?= e($catTc) ?>"><?= e($cat['name']) ?></h2>
-        </div>
-      </div>
-
-      <!-- Items -->
-      <div class="px-3 pt-2 pb-2 space-y-2 bg-white dark:bg-slate-900">
+      <!-- Item cards -->
+      <div class="px-4 pt-4 pb-6 space-y-2.5">
         <?php if (empty($cat['items'])): ?>
-        <p class="text-xs text-slate-400 dark:text-slate-600 text-center py-4">
+        <p class="text-xs text-gray-400 dark:text-slate-600 text-center py-4">
           Žiadne jedlá v tejto kategórii.
         </p>
         <?php else: foreach ($cat['items'] as $item):
-          $ibg   = $item['bg_color'] ?: $defItemBg;
-          $itc   = menuTextColor($ibg);
-          $imt   = menuMutedColor($ibg);
-          $ipr   = number_format((float)$item['price'], 2, ',', '');
-          $algN  = array_values(array_unique(array_filter(
+          $ibg  = $item['bg_color'] ?: $defItemBg;
+          $isWhiteCard = in_array($ibg, ['#FFFFFF', '#FFF8E7', '#F2ECD9'], true);
+          $itc  = $isWhiteCard ? '#1f2937' : menuTextColor($ibg);
+          $imt  = $isWhiteCard ? '#6b7280' : menuMutedColor($ibg);
+          $ipr  = number_format((float)$item['price'], 2, ',', '');
+          $algN = array_values(array_unique(array_filter(
               array_map('intval', array_filter(explode(',', (string)($item['allergens'] ?? '')), 'strlen')),
               fn($n) => $n >= 1 && $n <= 14
           )));
-          $algDot = ($itc === '#ffffff') ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.09)';
         ?>
-        <button class="w-full text-left rounded-2xl overflow-hidden shadow-sm
-                       active:scale-[.98] transition-transform"
-                style="background:<?= e($ibg) ?>"
+        <button class="w-full text-left rounded-[2rem] p-4 shadow-sm
+                       hover:shadow-md active:scale-[.98] transition-all duration-200
+                       <?= $isWhiteCard
+                           ? 'bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-800'
+                           : '' ?>"
+                <?= !$isWhiteCard ? "style=\"background:{$ibg}\"" : '' ?>
                 onclick='openSheet(<?= json_encode($item, JSON_HEX_APOS | JSON_UNESCAPED_UNICODE) ?>)'>
-          <div class="flex items-start gap-3 p-3.5">
-
-            <!-- Text -->
+          <div class="flex items-start gap-3">
             <div class="flex-1 min-w-0">
-              <p class="font-semibold text-sm leading-snug" style="color:<?= e($itc) ?>">
+              <p class="font-semibold text-sm leading-snug
+                        <?= $isWhiteCard ? 'text-gray-800 dark:text-gray-100' : '' ?>"
+                 <?= !$isWhiteCard ? "style=\"color:{$itc}\"" : '' ?>>
                 <?= e($item['name']) ?>
               </p>
               <?php if (!empty($item['weight'])): ?>
-              <p class="text-[11px] font-medium mt-0.5 opacity-80" style="color:<?= e($imt) ?>">
+              <p class="text-xs font-medium mt-0.5
+                        <?= $isWhiteCard ? 'text-gray-400 dark:text-slate-500' : '' ?>"
+                 <?= !$isWhiteCard ? "style=\"color:{$imt};opacity:.85\"" : '' ?>>
                 <?= e($item['weight']) ?>
               </p>
               <?php endif; ?>
               <?php if (!empty($item['description'])): ?>
-              <p class="text-xs mt-1 leading-relaxed clamp2" style="color:<?= e($imt) ?>">
+              <p class="text-sm mt-1 leading-relaxed clamp2
+                        <?= $isWhiteCard ? 'text-gray-500 dark:text-slate-400' : '' ?>"
+                 <?= !$isWhiteCard ? "style=\"color:{$imt}\"" : '' ?>>
                 <?= e($item['description']) ?>
               </p>
               <?php endif; ?>
               <?php if (!empty($settings['show_allergens']) && !empty($algN)): ?>
               <div class="flex flex-wrap gap-1 mt-2">
-                <?php foreach ($algN as $aNum): ?>
+                <?php foreach ($algN as $aNum):
+                  $dotBg = $isWhiteCard ? 'rgba(0,0,0,.06)' : ($itc === '#ffffff' ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.09)');
+                  $dotTc = $isWhiteCard ? '#9ca3af' : $imt;
+                ?>
                 <span class="w-4 h-4 rounded-full text-[9px] font-bold
                              flex items-center justify-center leading-none"
-                      style="background:<?= $algDot ?>;color:<?= e($imt) ?>">
+                      style="background:<?= $dotBg ?>;color:<?= $dotTc ?>">
                   <?= (int)$aNum ?>
                 </span>
                 <?php endforeach; ?>
               </div>
               <?php endif; ?>
             </div>
-
-            <!-- Price -->
-            <span class="flex-shrink-0 self-start mt-0.5 px-2.5 py-1 rounded-xl
-                         text-xs font-extrabold leading-snug whitespace-nowrap"
-                  style="background:<?= e($accentHex) ?>;color:<?= e($accentText) ?>">
+            <span class="flex-shrink-0 self-start mt-0.5 px-3 py-1 rounded-full
+                         text-sm font-bold leading-snug whitespace-nowrap
+                         <?= $isWhiteCard
+                             ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-gray-100'
+                             : '' ?>"
+                  <?= !$isWhiteCard ? "style=\"background:{$accentHex};color:{$accentText}\"" : '' ?>>
               <?= $ipr ?> €
             </span>
           </div>
         </button>
         <?php endforeach; endif; ?>
       </div>
+      <div class="h-3"></div>
     </section>
-    <?php endforeach; endif; ?>
-  </main>
+    <?php endforeach; ?>
+  </div><!-- /#cat-views -->
 
   <!-- ── OVERLAY ─────────────────────────────────────────────────── -->
   <div id="overlay" onclick="closeSheet()"
-       class="overlay fixed inset-0 bg-black/60 dark:bg-black/75 z-40"></div>
+       class="overlay fixed inset-0 bg-black/50 dark:bg-black/70 z-40"></div>
 
   <!-- ── BOTTOM SHEET ────────────────────────────────────────────── -->
   <article id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-name"
        class="sheet fixed bottom-0 left-1/2 w-full max-w-md z-50
               bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl
               max-h-[88dvh] flex flex-col overflow-hidden">
-
-    <!-- Sheet top bar -->
     <div class="flex-shrink-0 px-5 pt-3 pb-4
                 bg-white dark:bg-slate-900
-                border-b border-slate-100 dark:border-slate-800">
-      <div class="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-4"
-           aria-hidden="true"></div>
+                border-b border-gray-100 dark:border-slate-800">
+      <div class="w-10 h-1 bg-gray-200 dark:bg-slate-700 rounded-full mx-auto mb-4"></div>
       <div class="flex items-start justify-between gap-3">
         <div class="flex-1 min-w-0">
           <h2 id="sheet-name"
-              class="text-xl font-extrabold text-slate-900 dark:text-slate-100 leading-tight"></h2>
+              class="text-xl font-bold text-gray-900 dark:text-slate-100 leading-tight"></h2>
           <p id="sheet-weight"
-             class="text-sm text-slate-500 dark:text-slate-400 mt-0.5 hidden"></p>
+             class="text-sm text-gray-400 dark:text-slate-500 mt-0.5 hidden"></p>
         </div>
         <button onclick="closeSheet()" aria-label="Zavrieť"
-                class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800
-                       text-slate-500 dark:text-slate-400
+                class="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800
+                       text-gray-500 dark:text-slate-400
                        flex items-center justify-center flex-shrink-0
-                       text-sm leading-none transition active:scale-90">
-          ✕
-        </button>
+                       text-sm transition-all duration-200 active:scale-90">✕</button>
       </div>
-      <p id="sheet-price" class="text-2xl font-extrabold mt-2"
-         style="color:<?= e($accentHex) ?>"></p>
+      <p id="sheet-price"
+         class="text-2xl font-extrabold mt-2 text-gray-900 dark:text-white"></p>
     </div>
-
-    <!-- Sheet scrollable body -->
     <div id="sheet-body" class="flex-1 overflow-y-auto overscroll-contain px-5 py-5">
       <p id="sheet-desc"
-         class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed hidden"></p>
-
+         class="text-sm text-gray-500 dark:text-slate-400 leading-relaxed hidden"></p>
       <div id="sheet-allergens"
-           class="hidden mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+           class="hidden mt-5 pt-4 border-t border-gray-100 dark:border-slate-800">
         <h3 class="text-[10px] font-black uppercase tracking-[.12em] mb-3
-                   text-slate-400 dark:text-slate-500">Alergény</h3>
+                   text-gray-400 dark:text-slate-500">Alergény</h3>
         <ul id="sheet-allergen-list" class="space-y-2"></ul>
       </div>
     </div>
-
     <div class="flex-shrink-0 pb-safe bg-white dark:bg-slate-900"></div>
   </article>
 
 </div><!-- /#app -->
 
 <script>
-const ACCENT      = <?= json_encode($accentHex) ?>;
-const ACCENT_TEXT = <?= json_encode($accentText) ?>;
-
 const AL = <?= json_encode($AL, JSON_UNESCAPED_UNICODE) ?>;
 
 // ── SVG icons ─────────────────────────────────────────────────────
-const SVG_SUN = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-  <circle cx="12" cy="12" r="4"/>
-  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-</svg>`;
-
-const SVG_MOON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-</svg>`;
+const SVG_SUN = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
+const SVG_MOON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 
 // ── Dark mode ─────────────────────────────────────────────────────
 function toggleDark() {
@@ -416,42 +564,89 @@ function refreshDarkIcon() {
   if (el) el.innerHTML = document.documentElement.classList.contains('dark') ? SVG_MOON : SVG_SUN;
 }
 
+// ── Category navigation ────────────────────────────────────────────
+function showCategory(catId, catName) {
+  // Swap nav ↔ back bar
+  document.getElementById('cat-nav')?.classList.add('hidden');
+  const bar = document.getElementById('back-bar');
+  bar.style.display = 'flex';
+  document.getElementById('back-cat-name').textContent = catName;
+
+  // Highlight active pill
+  document.querySelectorAll('.cat-pill').forEach(p => {
+    p.classList.toggle('active', p.id === 'pill-' + catId);
+  });
+
+  // Hide home, show cat-views
+  document.getElementById('home-view').classList.add('hidden');
+  const cv = document.getElementById('cat-views');
+  cv.classList.remove('hidden');
+
+  // Show only the target section, animate it
+  document.querySelectorAll('.cat-section').forEach(s => {
+    const match = parseInt(s.dataset.catId) === catId;
+    if (match) {
+      s.classList.remove('hidden');
+      // re-trigger animation
+      s.classList.remove('view-animate');
+      void s.offsetWidth; // reflow
+      s.classList.add('view-animate');
+    } else {
+      s.classList.add('hidden');
+    }
+  });
+
+  // Scroll content to top
+  cv.scrollTop = 0;
+  window.scrollTo(0, 0);
+}
+
+function showHome() {
+  // Swap back bar ↔ nav
+  document.getElementById('back-bar').style.display = 'none';
+  document.getElementById('cat-nav')?.classList.remove('hidden');
+
+  // Clear active pill
+  document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+
+  // Hide cat-views, show home (with animation)
+  document.getElementById('cat-views').classList.add('hidden');
+  document.querySelectorAll('.cat-section').forEach(s => {
+    s.classList.add('hidden');
+    s.classList.remove('view-animate');
+  });
+
+  const hv = document.getElementById('home-view');
+  hv.classList.remove('hidden');
+  hv.classList.remove('view-animate');
+  void hv.offsetWidth;
+  hv.classList.add('view-animate');
+
+  window.scrollTo(0, 0);
+}
+
 // ── Bottom sheet ──────────────────────────────────────────────────
 let _scrollY = 0;
 
 function openSheet(item) {
-  // Name
   document.getElementById('sheet-name').textContent = item.name;
-
-  // Weight
   const wEl = document.getElementById('sheet-weight');
-  item.weight ? (wEl.textContent = item.weight, wEl.classList.remove('hidden'))
-              : wEl.classList.add('hidden');
-
-  // Price
+  item.weight ? (wEl.textContent = item.weight, wEl.classList.remove('hidden')) : wEl.classList.add('hidden');
   document.getElementById('sheet-price').textContent =
     parseFloat(item.price || 0).toFixed(2).replace('.', ',') + ' €';
-
-  // Description: prefer detailed
-  const desc = (String(item.detail_description || '').trim()) ||
-               (String(item.description || '').trim());
+  const desc = String(item.detail_description || '').trim() || String(item.description || '').trim();
   const dEl = document.getElementById('sheet-desc');
-  desc ? (dEl.textContent = desc, dEl.classList.remove('hidden'))
-       : dEl.classList.add('hidden');
-
-  // Allergens
+  desc ? (dEl.textContent = desc, dEl.classList.remove('hidden')) : dEl.classList.add('hidden');
   const nums = String(item.allergens || '').split(',')
-    .map(n => parseInt(n.trim(), 10))
-    .filter(n => n >= 1 && n <= 14);
+    .map(n => parseInt(n.trim(), 10)).filter(n => n >= 1 && n <= 14);
   const algDiv  = document.getElementById('sheet-allergens');
   const algList = document.getElementById('sheet-allergen-list');
   if (nums.length) {
     algList.innerHTML = nums.map(n =>
-      `<li class="flex items-start gap-2.5 text-sm text-slate-600 dark:text-slate-400">
-        <span class="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800
-                     text-slate-600 dark:text-slate-300
-                     text-[10px] font-bold flex items-center justify-center
-                     flex-shrink-0 mt-0.5">${n}</span>
+      `<li class="flex items-start gap-2.5 text-sm text-gray-600 dark:text-slate-400">
+        <span class="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-800
+                     text-gray-500 dark:text-slate-400 text-[10px] font-bold
+                     flex items-center justify-center flex-shrink-0 mt-0.5">${n}</span>
         <span>${AL[n] || ('Alergén ' + n)}</span>
       </li>`
     ).join('');
@@ -459,15 +654,9 @@ function openSheet(item) {
   } else {
     algDiv.classList.add('hidden');
   }
-
-  // Reset sheet scroll
   document.getElementById('sheet-body').scrollTop = 0;
-
-  // Lock background scroll (iOS-safe)
   _scrollY = window.scrollY;
-  document.body.style.cssText =
-    `position:fixed;top:-${_scrollY}px;left:0;right:0;overflow:hidden;width:100%`;
-
+  document.body.style.cssText = `position:fixed;top:-${_scrollY}px;left:0;right:0;overflow:hidden;width:100%`;
   document.getElementById('sheet').classList.add('open');
   document.getElementById('overlay').classList.add('open');
 }
@@ -479,49 +668,7 @@ function closeSheet() {
   window.scrollTo(0, _scrollY);
 }
 
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeSheet();
-});
-
-// ── Smooth scroll to section ──────────────────────────────────────
-function scrollToSection(catId) {
-  const target = document.getElementById('cat-' + catId);
-  const nav    = document.getElementById('cat-nav');
-  if (!target) return;
-  const offset = nav ? nav.offsetHeight + 2 : 2;
-  const top = target.getBoundingClientRect().top + window.scrollY - offset;
-  window.scrollTo({ top, behavior: 'smooth' });
-}
-
-// ── Active category pill via IntersectionObserver ─────────────────
-(function () {
-  const sections = Array.from(document.querySelectorAll('section[id^="cat-"]'));
-  if (!sections.length) return;
-
-  let activeId = null;
-
-  const obs = new IntersectionObserver(entries => {
-    // Collect all currently intersecting sections
-    entries.forEach(e => { e.target._intersecting = e.isIntersecting; });
-    const vis = sections.filter(s => s._intersecting);
-    if (!vis.length) return;
-
-    const topSection = vis.reduce((a, b) =>
-      a.getBoundingClientRect().top < b.getBoundingClientRect().top ? a : b
-    );
-    const id = topSection.id.replace('cat-', '');
-    if (id === activeId) return;
-    activeId = id;
-
-    document.querySelectorAll('.cat-pill').forEach(p => {
-      const match = p.id === 'pill-' + id;
-      p.classList.toggle('active', match);
-      if (match) p.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
-    });
-  }, { rootMargin: '-20% 0px -75% 0px', threshold: 0 });
-
-  sections.forEach(s => obs.observe(s));
-})();
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
 
 // ── Init ──────────────────────────────────────────────────────────
 refreshDarkIcon();

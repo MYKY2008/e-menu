@@ -1,11 +1,17 @@
 <!DOCTYPE html>
-<html lang="sk">
+<html lang="sk" class="">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard — GastroLink QR</title>
+<!-- Anti-flash dark mode -->
+<script>(function(){if(localStorage.getItem('gl-dark')==='1')document.documentElement.classList.add('dark')})();</script>
+<!-- Inter font -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
-<script>tailwind.config={darkMode:'class'}</script>
+<script>tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','sans-serif']}}}}</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 *{-webkit-tap-highlight-color:transparent}
@@ -13,7 +19,7 @@
 .no-scrollbar::-webkit-scrollbar{display:none}
 </style>
 </head>
-<body class="bg-slate-100 min-h-screen">
+<body class="bg-gray-50 dark:bg-slate-950 min-h-screen transition-colors duration-200">
 
 <?php
 $db     = getDB();
@@ -63,6 +69,20 @@ if ($selected) {
     if ($row) $menuSettings = array_merge($menuSettings, $row);
 }
 
+// Scan stats per venue
+$scanStats = [];
+if (!empty($venues)) {
+    $slugs   = array_column($venues, 'slug');
+    $inPh    = implode(',', array_fill(0, count($slugs), '?'));
+    $stAll   = $db->prepare("SELECT venue_slug, COUNT(*) as c FROM scans WHERE venue_slug IN ($inPh) GROUP BY venue_slug");
+    $stAll->execute($slugs);
+    foreach ($stAll->fetchAll() as $r) $scanStats[$r['venue_slug']]['total'] = (int)$r['c'];
+    $st30    = $db->prepare("SELECT venue_slug, COUNT(*) as c FROM scans WHERE venue_slug IN ($inPh)
+        AND created_at >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-30 days') GROUP BY venue_slug");
+    $st30->execute($slugs);
+    foreach ($st30->fetchAll() as $r) $scanStats[$r['venue_slug']]['month'] = (int)$r['c'];
+}
+
 $GASTRO_THEMES = getGastroThemes();
 
 $GASTRO_EMOJIS = [
@@ -80,16 +100,33 @@ $EU_ALLERGENS = [
 ?>
 
 <!-- ── NAV ────────────────────────────────────────────────────────── -->
-<nav class="bg-white shadow-sm px-5 py-3 flex items-center justify-between sticky top-0 z-30 border-b border-slate-100">
-  <a href="<?= url() ?>" class="font-extrabold text-indigo-700 text-sm">
-    GastroLink <span class="text-emerald-600">QR</span>
+<nav class="bg-white/80 dark:bg-slate-950/80 backdrop-blur-lg shadow-sm px-5 py-3 flex items-center justify-between sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800">
+  <a href="<?= url() ?>" class="font-extrabold text-sm tracking-tight">
+    <span class="text-indigo-600">GastroLink</span><span class="text-emerald-500">QR</span>
   </a>
-  <div class="flex items-center gap-4">
+  <div class="flex items-center gap-3">
     <span class="text-slate-400 text-xs hidden sm:inline"><?= e($_SESSION['username']) ?></span>
     <?php if ($role === 'admin'): ?>
-    <a href="<?= url('admin') ?>" class="text-indigo-600 hover:underline text-xs font-semibold">Admin</a>
+    <a href="<?= url('admin') ?>"
+       class="text-xs font-semibold px-3 py-1.5 rounded-xl
+              bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400
+              hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-all duration-200">
+      Admin
+    </a>
     <?php endif; ?>
-    <a href="<?= url('logout') ?>" class="text-red-500 hover:underline text-xs">Odhlásiť</a>
+    <!-- Dark mode toggle -->
+    <button id="dark-toggle" onclick="toggleDark()" aria-label="Prepnúť tmavý režim"
+            class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800
+                   flex items-center justify-center
+                   text-slate-500 dark:text-slate-400
+                   hover:bg-gray-200 dark:hover:bg-slate-700
+                   transition-all duration-200">
+      <span id="dark-icon" class="w-3.5 h-3.5 block pointer-events-none"></span>
+    </button>
+    <a href="<?= url('logout') ?>"
+       class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+      Odhlásiť
+    </a>
   </div>
 </nav>
 
@@ -109,9 +146,9 @@ $EU_ALLERGENS = [
     </div>
     <?php endif; ?>
 
-    <div class="bg-white rounded-2xl shadow-sm p-4 border border-slate-100">
+    <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-4 border border-gray-100 dark:border-slate-800">
       <div class="flex items-center justify-between mb-3">
-        <span class="font-bold text-slate-700 text-xs uppercase tracking-widest">Prevádzky</span>
+        <span class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest">Prevádzky</span>
         <span class="text-xs text-slate-400">
           <?= $venueCount ?>/<?= ($role==='admin'||$venueLimit===9999)?'∞':$venueLimit ?>
         </span>
@@ -128,11 +165,16 @@ $EU_ALLERGENS = [
         <li>
           <a href="?edit=<?= e($v['slug']) ?>"
              class="flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs transition
-                    <?= $active ? 'bg-indigo-50 text-indigo-700 font-bold'
-                                : 'hover:bg-slate-50 text-slate-600 font-medium' ?>">
+                    <?= $active ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-bold'
+                                : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium' ?>">
             <span class="w-2.5 h-2.5 rounded-full flex-shrink-0"
                   style="background:<?= e($vc['hex']) ?>"></span>
-            <span class="truncate"><?= e($v['name']) ?></span>
+            <span class="flex-1 truncate"><?= e($v['name']) ?></span>
+            <?php $sc = $scanStats[$v['slug']] ?? []; if (!empty($sc['month'])): ?>
+            <span class="text-[10px] font-semibold text-slate-400 dark:text-slate-500 flex-shrink-0">
+              👁 <?= $sc['month'] ?>
+            </span>
+            <?php endif; ?>
           </a>
         </li>
         <?php endforeach; ?>
@@ -149,12 +191,31 @@ $EU_ALLERGENS = [
     </div>
 
     <?php if ($selected): ?>
-    <div class="bg-white rounded-2xl shadow-sm p-4 border border-slate-100">
-      <h3 class="font-bold text-slate-700 text-xs uppercase tracking-widest mb-3">Rýchly odkaz</h3>
+    <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-4 border border-gray-100 dark:border-slate-800">
+      <h3 class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest mb-3">Rýchly odkaz</h3>
       <a href="<?= e(baseUrl() . '/r/' . $selected['slug']) ?>" target="_blank"
          class="block text-xs text-indigo-600 hover:underline break-all">
         /r/<?= e($selected['slug']) ?>
       </a>
+    </div>
+
+    <?php
+    $ss    = $scanStats[$selected['slug']] ?? [];
+    $total = (int)($ss['total'] ?? 0);
+    $month = (int)($ss['month'] ?? 0);
+    ?>
+    <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-4 border border-gray-100 dark:border-slate-800">
+      <h3 class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest mb-3">Analytika</h3>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="bg-gray-50 dark:bg-slate-800 rounded-xl p-3 text-center">
+          <p class="text-xl font-extrabold text-slate-800 dark:text-white"><?= $month ?></p>
+          <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">👁 tento mesiac</p>
+        </div>
+        <div class="bg-gray-50 dark:bg-slate-800 rounded-xl p-3 text-center">
+          <p class="text-xl font-extrabold text-slate-800 dark:text-white"><?= $total ?></p>
+          <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">celkovo</p>
+        </div>
+      </div>
     </div>
     <?php endif; ?>
   </aside>
@@ -162,21 +223,23 @@ $EU_ALLERGENS = [
   <!-- ══ CENTER: Tabs ════════════════════════════════════════════════ -->
   <section class="min-w-0 space-y-3">
 
-    <!-- Tab bar -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 flex overflow-hidden">
+    <!-- Tab bar (segment control) -->
+    <div class="bg-gray-100 dark:bg-slate-800 rounded-[2rem] p-1.5 flex gap-1 border border-gray-200 dark:border-slate-700">
       <button id="tab-btn-settings" onclick="switchTab('settings')"
-              class="flex-1 py-3 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition">
+              class="flex-1 py-2.5 text-sm font-bold rounded-3xl transition-all duration-200
+                     bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-100 dark:border-slate-700">
         ⚙️ Nastavenia
       </button>
       <button id="tab-btn-menu" onclick="switchTab('menu')"
-              class="flex-1 py-3 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition">
+              class="flex-1 py-2.5 text-sm font-bold rounded-3xl transition-all duration-200
+                     text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
         🍽️ Jedálny lístok
       </button>
     </div>
 
     <!-- ── Tab: Settings ─────────────────────────────────────────── -->
-    <div id="tab-settings" class="bg-white rounded-2xl shadow-sm p-6 border border-slate-100">
-      <h2 id="settings-title" class="font-bold text-slate-800 text-sm mb-5">
+    <div id="tab-settings" class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-6 border border-gray-100 dark:border-slate-800">
+      <h2 id="settings-title" class="font-bold text-slate-800 dark:text-white text-sm mb-5">
         <?= $selected ? 'Upraviť prevádzku' : 'Nová prevádzka' ?>
       </h2>
       <div class="space-y-4">
@@ -184,15 +247,15 @@ $EU_ALLERGENS = [
 
         <!-- Slug -->
         <div>
-          <label class="text-xs font-semibold text-slate-600 mb-1.5 block">URL slug *</label>
-          <div class="flex rounded-xl border border-slate-300 overflow-hidden
-                      focus-within:ring-2 focus-within:ring-indigo-400 focus-within:border-indigo-400">
-            <span class="bg-slate-50 text-slate-400 text-xs px-3 flex items-center border-r border-slate-200">
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">URL slug *</label>
+          <div class="flex rounded-xl bg-gray-100 dark:bg-slate-800 overflow-hidden
+                      focus-within:ring-2 focus-within:ring-indigo-500 transition-all duration-200">
+            <span class="text-slate-500 dark:text-slate-400 text-xs px-3 flex items-center border-r border-gray-200 dark:border-slate-700">
               /r/
             </span>
             <input id="f-slug" type="text" required maxlength="50"
                    pattern="[a-z0-9][a-z0-9_\-]{1,49}"
-                   class="flex-1 px-3 py-2.5 text-sm outline-none bg-white"
+                   class="flex-1 px-3 py-3 text-sm outline-none bg-transparent text-slate-900 dark:text-slate-100"
                    value="<?= $selected ? e($selected['slug']) : '' ?>"
                    placeholder="nazov-podniku"
                    oninput="updatePreview()">
@@ -201,10 +264,10 @@ $EU_ALLERGENS = [
 
         <!-- Name -->
         <div>
-          <label class="text-xs font-semibold text-slate-600 mb-1.5 block">Názov podniku *</label>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Názov podniku *</label>
           <input id="f-name" type="text" required maxlength="200"
-                 class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm
-                        outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+                 class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
+                        text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
                  value="<?= $selected ? e($selected['name']) : '' ?>"
                  placeholder="Kaviareň U Márie"
                  oninput="updatePreview()">
@@ -216,10 +279,10 @@ $EU_ALLERGENS = [
             ['f-insta',  'Instagram (URL)',        $selected['instagram_url'] ?? ''],
         ] as [$fid, $label, $val]): ?>
         <div>
-          <label class="text-xs font-semibold text-slate-600 mb-1.5 block"><?= $label ?></label>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block"><?= $label ?></label>
           <input id="<?= $fid ?>" type="url"
-                 class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm
-                        outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+                 class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
+                        text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
                  value="<?= e($val) ?>" placeholder="https://"
                  oninput="updatePreview()">
         </div>
@@ -227,7 +290,7 @@ $EU_ALLERGENS = [
 
         <!-- Theme color (venue accent) -->
         <div>
-          <label class="text-xs font-semibold text-slate-600 mb-2 block">Farba témy / hlavičky</label>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 block">Farba témy / hlavičky</label>
           <div class="flex flex-wrap gap-2 mb-3">
             <?php foreach ($pal as $key => $info): ?>
             <button type="button" onclick="setVenueColor('<?= e($key) ?>')"
@@ -239,38 +302,75 @@ $EU_ALLERGENS = [
             </button>
             <?php endforeach; ?>
           </div>
-          <div class="flex items-center gap-2">
+          <label class="flex items-center gap-3 px-3 py-2.5 rounded-xl
+                        bg-gray-100 dark:bg-slate-800 cursor-pointer
+                        hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-200
+                        w-fit">
             <input type="color" id="f-color-picker"
-                   class="w-7 h-7 rounded-lg border border-slate-300 cursor-pointer"
+                   class="w-6 h-6 rounded-md cursor-pointer border-0 p-0 bg-transparent"
                    value="<?= ($selected&&preg_match('/^#[0-9a-fA-F]{6}$/',$selected['color']))
                                ? e($selected['color']) : '#111827' ?>"
                    oninput="setVenueColor(this.value)">
-            <span class="text-xs text-slate-400">Vlastná farba</span>
-          </div>
+            <span class="text-xs font-semibold text-slate-600 dark:text-slate-400 select-none">
+              Vlastná farba
+            </span>
+          </label>
           <input type="hidden" id="f-color" value="<?= $selected ? e($selected['color']) : 'black' ?>">
         </div>
 
         <!-- Logo -->
         <div>
-          <label class="text-xs font-semibold text-slate-600 mb-1.5 block">Logo (voliteľné)</label>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Logo (voliteľné)</label>
           <div id="logo-preview-wrap"
                class="<?= ($selected&&$selected['logo']) ? '' : 'hidden' ?> mb-3">
             <img id="logo-preview"
-                 src="<?= ($selected&&$selected['logo']) ? e($selected['logo']) : '' ?>"
-                 alt="" class="h-14 w-14 object-contain rounded-xl border border-slate-200">
+                 src="<?= ($selected&&$selected['logo']) ? e(imgUrl($selected['logo'])) : '' ?>"
+                 alt="" class="h-14 w-14 object-contain rounded-xl border border-slate-200 dark:border-slate-700">
             <button type="button" onclick="clearLogo()"
-                    class="mt-1 text-xs text-red-500 hover:underline block">
+                    class="mt-1 text-xs text-red-500 dark:text-red-400 hover:underline block">
               Odstrániť logo
             </button>
           </div>
           <input type="file" id="f-logo-file" accept="image/*"
-                 class="text-xs text-slate-500 w-full file:mr-3 file:py-1.5 file:px-3
-                        file:rounded-lg file:border-0 file:text-xs file:font-semibold
-                        file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                 class="text-xs text-slate-500 dark:text-slate-400 w-full
+                        file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
+                        file:text-xs file:font-semibold
+                        file:bg-indigo-50 dark:file:bg-indigo-900/30
+                        file:text-indigo-700 dark:file:text-indigo-400
+                        hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50">
           <input type="hidden" id="f-logo"
-                 value="<?= ($selected&&$selected['logo']) ? e($selected['logo']) : '' ?>">
+                 value="<?= ($selected&&$selected['logo']) ? e(imgUrl($selected['logo'])) : '' ?>">
           <p class="text-[11px] text-slate-400 mt-1.5">
             Max 512 KB · automaticky orezané na 256 × 256 px
+          </p>
+        </div>
+
+        <!-- Cover image -->
+        <div>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Cover fotka <span class="text-slate-400 font-normal">(voliteľné · zobrazí sa namiesto farebnej hlavičky)</span>
+          </label>
+          <div id="cover-preview-wrap"
+               class="<?= ($selected && !empty($selected['cover_image'])) ? '' : 'hidden' ?> mb-3">
+            <img id="cover-preview"
+                 src="<?= ($selected && !empty($selected['cover_image'])) ? e(imgUrl($selected['cover_image'])) : '' ?>"
+                 alt="" class="w-full h-28 object-cover rounded-2xl border border-gray-200 dark:border-slate-700">
+            <button type="button" onclick="clearCover()"
+                    class="mt-1 text-xs text-red-500 dark:text-red-400 hover:underline block">
+              Odstrániť cover fotku
+            </button>
+          </div>
+          <input type="file" id="f-cover-file" accept="image/*"
+                 class="text-xs text-slate-500 dark:text-slate-400 w-full
+                        file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
+                        file:text-xs file:font-semibold
+                        file:bg-indigo-50 dark:file:bg-indigo-900/30
+                        file:text-indigo-700 dark:file:text-indigo-400
+                        hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50">
+          <input type="hidden" id="f-cover"
+                 value="<?= ($selected && !empty($selected['cover_image'])) ? e(imgUrl($selected['cover_image'])) : '' ?>">
+          <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+            Max 1 MB · automaticky orezané na 1200 × 400 px (3:1)
           </p>
         </div>
 
@@ -283,7 +383,8 @@ $EU_ALLERGENS = [
           </button>
           <?php if ($selected): ?>
           <button type="button" onclick="deleteVenue('<?= e($selected['slug']) ?>')"
-                  class="px-4 bg-red-50 hover:bg-red-100 text-red-600
+                  class="px-4 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50
+                         text-red-600 dark:text-red-400
                          font-bold py-2.5 rounded-xl text-sm transition">
             Zmazať
           </button>
@@ -295,15 +396,15 @@ $EU_ALLERGENS = [
     <!-- ── Tab: Menu ─────────────────────────────────────────────── -->
     <div id="tab-menu" class="space-y-3 hidden">
       <?php if (!$selected): ?>
-      <div class="bg-white rounded-2xl shadow-sm p-12 text-center border border-slate-100">
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-12 text-center border border-gray-100 dark:border-slate-800">
         <p class="text-4xl mb-3">🍽️</p>
         <p class="text-sm text-slate-400">Najprv vytvorte prevádzku v záložke Nastavenia.</p>
       </div>
       <?php else: ?>
 
       <!-- Global menu settings -->
-      <div class="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
-        <h3 class="font-bold text-slate-700 text-sm mb-4">Globálne nastavenia menu</h3>
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
+        <h3 class="font-bold text-slate-700 dark:text-slate-200 text-sm mb-4">Globálne nastavenia menu</h3>
 
         <div class="grid grid-cols-3 gap-3 mb-5">
           <!-- Checkboxes -->
@@ -313,19 +414,20 @@ $EU_ALLERGENS = [
               ['m-dark-default',   'dark_mode_default','🌙 Temný štandardne'],
           ] as [$id, $key, $label]): ?>
           <label class="flex items-center gap-2 cursor-pointer select-none p-2.5 rounded-xl
-                        border border-slate-100 hover:bg-slate-50 transition">
+                        border border-gray-100 dark:border-slate-700
+                        hover:bg-gray-50 dark:hover:bg-slate-800 transition">
             <input type="checkbox" id="<?= $id ?>"
                    class="w-4 h-4 accent-indigo-600"
                    <?= !empty($menuSettings[$key]) ? 'checked' : '' ?>
                    onchange="menuData.settings['<?= $key ?>']=this.checked?1:0;updatePreview()">
-            <span class="text-xs font-semibold text-slate-700"><?= $label ?></span>
+            <span class="text-xs font-semibold text-slate-700 dark:text-slate-300"><?= $label ?></span>
           </label>
           <?php endforeach; ?>
         </div>
 
         <!-- Default category theme -->
         <div class="mb-4">
-          <p class="text-xs font-semibold text-slate-600 mb-2">
+          <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
             Predvolená farba kategórií
           </p>
           <div class="flex flex-wrap gap-2">
@@ -346,7 +448,7 @@ $EU_ALLERGENS = [
 
         <!-- Default item theme -->
         <div class="mb-5">
-          <p class="text-xs font-semibold text-slate-600 mb-2">
+          <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
             Predvolená farba kariet jedál
           </p>
           <div class="flex flex-wrap gap-2">
@@ -373,9 +475,9 @@ $EU_ALLERGENS = [
       </div>
 
       <!-- Categories & items -->
-      <div class="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="font-bold text-slate-700 text-sm">Kategórie a jedlá</h3>
+          <h3 class="font-bold text-slate-700 dark:text-slate-200 text-sm">Kategórie a jedlá</h3>
           <button onclick="openCatModal(null)"
                   class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700
                          text-white text-xs font-bold rounded-xl transition">
@@ -394,13 +496,14 @@ $EU_ALLERGENS = [
   <aside class="space-y-3">
 
     <!-- iPhone preview frame -->
-    <div class="bg-white rounded-2xl shadow-sm p-4 border border-slate-100">
+    <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-4 border border-gray-100 dark:border-slate-800">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="font-bold text-slate-700 text-xs uppercase tracking-widest">Živý náhľad</h2>
+        <h2 class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest">Živý náhľad</h2>
         <button onclick="previewDark=!previewDark;updatePreview()"
                 id="preview-dark-btn"
-                class="text-xs px-2.5 py-1 rounded-lg border border-slate-200
-                       text-slate-500 hover:bg-slate-50 transition font-medium">
+                class="text-xs px-2.5 py-1 rounded-xl border border-gray-200 dark:border-slate-700
+                       bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400
+                       hover:bg-gray-50 dark:hover:bg-slate-700 transition font-medium">
           🌙 Dark
         </button>
       </div>
@@ -418,8 +521,8 @@ $EU_ALLERGENS = [
     </div>
 
     <!-- QR code -->
-    <div class="bg-white rounded-2xl shadow-sm p-4 border border-slate-100">
-      <h2 class="font-bold text-slate-700 text-xs uppercase tracking-widest mb-3">QR kód</h2>
+    <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-4 border border-gray-100 dark:border-slate-800">
+      <h2 class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest mb-3">QR kód</h2>
       <?php if ($selected): ?>
       <div id="qr-box" class="flex justify-center mb-3"></div>
       <button onclick="downloadQR()"
@@ -439,18 +542,18 @@ $EU_ALLERGENS = [
 <!-- ══ MODAL: Category ════════════════════════════════════════════════ -->
 <div id="modal-cat"
      class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm max-h-[92vh] overflow-y-auto">
-    <h3 class="font-bold text-lg mb-5" id="modal-cat-title">Kategória</h3>
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-6 w-full max-w-sm max-h-[92vh] overflow-y-auto border border-gray-100 dark:border-slate-800">
+    <h3 class="font-bold text-lg mb-5 text-slate-900 dark:text-white" id="modal-cat-title">Kategória</h3>
 
     <!-- Emoji picker -->
     <div class="mb-5">
-      <label class="text-xs font-semibold text-slate-600 mb-2 block">Ikona kategórie</label>
-      <div class="grid grid-cols-6 gap-1.5 p-3 bg-slate-50 rounded-xl">
+      <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 block">Ikona kategórie</label>
+      <div class="grid grid-cols-6 gap-1.5 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
         <?php foreach ($GASTRO_EMOJIS as $em): ?>
         <button type="button" onclick="selectEmoji('<?= e($em) ?>')"
                 data-emoji="<?= e($em) ?>"
                 class="emoji-btn w-9 h-9 rounded-xl text-xl flex items-center justify-center
-                       hover:bg-white border-2 border-transparent transition
+                       hover:bg-white dark:hover:bg-slate-700 border-2 border-transparent transition
                        hover:shadow-sm hover:scale-110">
           <?= $em ?>
         </button>
@@ -464,22 +567,22 @@ $EU_ALLERGENS = [
 
     <!-- Name -->
     <div class="mb-5">
-      <label class="text-xs font-semibold text-slate-600 mb-1.5 block">Názov kategórie *</label>
+      <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Názov kategórie *</label>
       <input id="mc-name" type="text" placeholder="napr. Polievky"
-             class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm
-                    outline-none focus:ring-2 focus:ring-indigo-400">
+             class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
+                    text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
     </div>
 
     <!-- Gastro theme palette -->
     <div class="mb-5">
-      <label class="text-xs font-semibold text-slate-600 mb-2 block">
+      <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 block">
         Farba pozadia <span class="text-slate-400 font-normal">(alebo sa použije predvolená)</span>
       </label>
       <div class="flex flex-wrap gap-2">
         <!-- "None / use default" -->
         <button type="button" onclick="selectCatTheme('')" data-ccat=""
-                class="cat-theme-btn w-9 h-9 rounded-full border-2 border-slate-300
-                       bg-white flex items-center justify-center text-slate-400
+                class="cat-theme-btn w-9 h-9 rounded-full border-2 border-slate-300 dark:border-slate-600
+                       bg-white dark:bg-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500
                        ring-offset-1 transition hover:border-slate-400">
           <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none">
             <line x1="3" y1="13" x2="13" y2="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -489,7 +592,7 @@ $EU_ALLERGENS = [
         <button type="button" onclick="selectCatTheme('<?= e($gt['bg']) ?>')"
                 data-ccat="<?= e($gt['bg']) ?>"
                 title="<?= e($gt['name']) ?>"
-                class="cat-theme-btn w-9 h-9 rounded-full border-2 border-slate-200
+                class="cat-theme-btn w-9 h-9 rounded-full border-2 border-slate-200 dark:border-slate-700
                        ring-offset-1 transition hover:scale-110"
                 style="background:<?= e($gt['bg']) ?>">
         </button>
@@ -506,7 +609,8 @@ $EU_ALLERGENS = [
         Uložiť
       </button>
       <button onclick="closeModal('modal-cat')"
-              class="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700
+              class="px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
+                     text-slate-700 dark:text-slate-300
                      font-bold py-2.5 rounded-xl text-sm transition">
         Zrušiť
       </button>
@@ -517,67 +621,67 @@ $EU_ALLERGENS = [
 <!-- ══ MODAL: Item ════════════════════════════════════════════════════ -->
 <div id="modal-item"
      class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto">
-    <h3 class="font-bold text-lg mb-5" id="modal-item-title">Jedlo</h3>
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto border border-gray-100 dark:border-slate-800">
+    <h3 class="font-bold text-lg mb-5 text-slate-900 dark:text-white" id="modal-item-title">Jedlo</h3>
     <div class="space-y-4">
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="text-xs font-semibold text-slate-600 mb-1.5 block">Názov *</label>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Názov *</label>
           <input id="mi-name" type="text" placeholder="Rajčinová polievka"
-                 class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm
-                        outline-none focus:ring-2 focus:ring-indigo-400">
+                 class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
+                        text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
         </div>
         <div>
-          <label class="text-xs font-semibold text-slate-600 mb-1.5 block">Cena (€) *</label>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Cena (€) *</label>
           <input id="mi-price" type="number" step="0.01" min="0" placeholder="4.50"
-                 class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm
-                        outline-none focus:ring-2 focus:ring-indigo-400">
+                 class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
+                        text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
         </div>
       </div>
 
       <div>
-        <label class="text-xs font-semibold text-slate-600 mb-1.5 block">Gramáž / objem</label>
+        <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Gramáž / objem</label>
         <input id="mi-weight" type="text" placeholder="300 ml, 150 g..."
-               class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm
-                      outline-none focus:ring-2 focus:ring-indigo-400">
+               class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
+                      text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
       </div>
 
       <div>
-        <label class="text-xs font-semibold text-slate-600 mb-1.5 block">
+        <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">
           Krátky popis <span class="text-slate-400 font-normal">(zobrazuje sa v zozname)</span>
         </label>
         <input id="mi-desc" type="text"
                placeholder="Krémová polievka z čerstvých rajčín"
-               class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm
-                      outline-none focus:ring-2 focus:ring-indigo-400">
+               class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
+                      text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
       </div>
 
       <div>
-        <label class="text-xs font-semibold text-slate-600 mb-1.5 block">
+        <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">
           Detailný popis <span class="text-slate-400 font-normal">(v detail okne)</span>
         </label>
         <textarea id="mi-detail" rows="3"
                   placeholder="Podrobný opis jedla pre zákazníka…"
-                  class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm
-                         outline-none focus:ring-2 focus:ring-indigo-400 resize-none"></textarea>
+                  class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
+                         text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200 resize-none"></textarea>
       </div>
 
       <label class="flex items-center gap-2.5 cursor-pointer">
         <input type="checkbox" id="mi-featured" class="w-4 h-4 accent-amber-500">
-        <span class="text-xs font-semibold text-slate-700">⭐ Zobraziť v sekcii "Odporúčame"</span>
+        <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">⭐ Zobraziť v sekcii "Odporúčame"</span>
       </label>
 
       <!-- Allergens -->
       <div>
-        <label class="text-xs font-semibold text-slate-600 mb-2 block">Alergény (EU 1–14)</label>
+        <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 block">Alergény (EU 1–14)</label>
         <div class="grid grid-cols-2 gap-1.5">
           <?php foreach ($EU_ALLERGENS as $num => $label): ?>
           <label class="flex items-center gap-1.5 cursor-pointer
-                        px-2 py-1.5 rounded-lg hover:bg-slate-50 transition">
+                        px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition">
             <input type="checkbox" class="mi-allergen w-3.5 h-3.5 accent-indigo-600"
                    value="<?= $num ?>">
-            <span class="text-xs text-slate-600"><?= $num ?> – <?= e($label) ?></span>
+            <span class="text-xs text-slate-600 dark:text-slate-400"><?= $num ?> – <?= e($label) ?></span>
           </label>
           <?php endforeach; ?>
         </div>
@@ -585,11 +689,11 @@ $EU_ALLERGENS = [
 
       <!-- Item gastro theme -->
       <div>
-        <label class="text-xs font-semibold text-slate-600 mb-2 block">Farba karty jedla</label>
+        <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 block">Farba karty jedla</label>
         <div class="flex flex-wrap gap-2">
           <button type="button" onclick="selectItemTheme('')" data-iitem=""
-                  class="item-theme-btn w-9 h-9 rounded-full border-2 border-slate-300
-                         bg-white flex items-center justify-center text-slate-400
+                  class="item-theme-btn w-9 h-9 rounded-full border-2 border-slate-300 dark:border-slate-600
+                         bg-white dark:bg-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500
                          ring-offset-1 transition hover:border-slate-400">
             <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none">
               <line x1="3" y1="13" x2="13" y2="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -599,7 +703,7 @@ $EU_ALLERGENS = [
           <button type="button" onclick="selectItemTheme('<?= e($gt['bg']) ?>')"
                   data-iitem="<?= e($gt['bg']) ?>"
                   title="<?= e($gt['name']) ?>"
-                  class="item-theme-btn w-9 h-9 rounded-full border-2 border-slate-200
+                  class="item-theme-btn w-9 h-9 rounded-full border-2 border-slate-200 dark:border-slate-700
                          ring-offset-1 transition hover:scale-110"
                   style="background:<?= e($gt['bg']) ?>">
           </button>
@@ -618,7 +722,8 @@ $EU_ALLERGENS = [
         Uložiť jedlo
       </button>
       <button onclick="closeModal('modal-item')"
-              class="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700
+              class="px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
+                     text-slate-700 dark:text-slate-300
                      font-bold py-2.5 rounded-xl text-sm transition">
         Zrušiť
       </button>
@@ -723,17 +828,49 @@ function clearLogo() {
   updatePreview();
 }
 
+// ── Cover image upload (1200×400 crop center) ─────────────────────
+document.getElementById('f-cover-file')?.addEventListener('change', function () {
+  const file = this.files[0]; if (!file) return;
+  const img = new Image();
+  const objUrl = URL.createObjectURL(file);
+  img.onload = () => {
+    const TW = 1200, TH = 400;
+    const cv = document.createElement('canvas');
+    cv.width = TW; cv.height = TH;
+    const ctx = cv.getContext('2d');
+    const ir = img.width / img.height, tr = TW / TH;
+    let sx, sy, sw, sh;
+    if (ir > tr) { sh = img.height; sw = sh * tr; sx = (img.width - sw) / 2; sy = 0; }
+    else         { sw = img.width;  sh = sw / tr;  sx = 0; sy = (img.height - sh) / 2; }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, TW, TH);
+    const url = cv.toDataURL('image/jpeg', 0.82);
+    if (url.length > 1_500_000) { toast('Cover fotka je príliš veľká (max 1 MB).', 'error'); URL.revokeObjectURL(objUrl); return; }
+    document.getElementById('f-cover').value = url;
+    document.getElementById('cover-preview').src = url;
+    document.getElementById('cover-preview-wrap').classList.remove('hidden');
+    updatePreview();
+    URL.revokeObjectURL(objUrl);
+  };
+  img.src = objUrl;
+});
+
+function clearCover() {
+  document.getElementById('f-cover').value = '';
+  document.getElementById('f-cover-file').value = '';
+  document.getElementById('cover-preview').src = '';
+  document.getElementById('cover-preview-wrap').classList.add('hidden');
+  updatePreview();
+}
+
 // ── Tab switching ─────────────────────────────────────────────────
 function switchTab(tab) {
   activeTab = tab;
+  const ACTIVE   = 'flex-1 py-2.5 text-sm font-bold rounded-3xl transition-all duration-200 bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-100 dark:border-slate-700';
+  const INACTIVE = 'flex-1 py-2.5 text-sm font-bold rounded-3xl transition-all duration-200 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200';
   ['settings', 'menu'].forEach(t => {
     document.getElementById('tab-' + t)?.classList.toggle('hidden', t !== tab);
     const btn = document.getElementById('tab-btn-' + t);
-    if (!btn) return;
-    btn.classList.toggle('border-indigo-600', t === tab);
-    btn.classList.toggle('text-indigo-600',   t === tab);
-    btn.classList.toggle('border-transparent', t !== tab);
-    btn.classList.toggle('text-slate-400',    t !== tab);
+    if (btn) btn.className = t === tab ? ACTIVE : INACTIVE;
   });
   if (tab === 'menu') renderMenuTree();
   updatePreview();
@@ -986,6 +1123,7 @@ async function saveVenue() {
     instagram_url: document.getElementById('f-insta').value.trim(),
     color:         document.getElementById('f-color').value,
     logo:          document.getElementById('f-logo').value,
+    cover_image:   document.getElementById('f-cover').value,
   };
   try {
     const res  = await fetch(APP_URL + '/api/save_venue.php', {
@@ -1026,12 +1164,15 @@ async function deleteVenue(slug) {
 }
 
 function openNewVenue() {
-  ['f-original-slug','f-slug','f-name','f-google','f-insta','f-logo'].forEach(id => {
+  ['f-original-slug','f-slug','f-name','f-google','f-insta','f-logo','f-cover'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const logoFile = document.getElementById('f-logo-file');
   if (logoFile) logoFile.value = '';
+  const coverFile = document.getElementById('f-cover-file');
+  if (coverFile) coverFile.value = '';
   document.getElementById('logo-preview-wrap')?.classList.add('hidden');
+  document.getElementById('cover-preview-wrap')?.classList.add('hidden');
   document.getElementById('settings-title').textContent = 'Nová prevádzka';
   setVenueColor('black');
   switchTab('settings');
@@ -1050,19 +1191,19 @@ function renderMenuTree() {
     const catBg = cat.bg_color || menuData.settings.default_category_color || '#1E3A5F';
     const catTc = yiq(catBg);
     const items = cat.items.map(item => `
-      <div class="flex items-center gap-2 py-2 border-b border-slate-50 last:border-0">
-        <span class="flex-1 text-xs text-slate-700 truncate font-medium">${esc(item.name)}</span>
-        <span class="text-xs font-bold text-slate-400">${fmtPrice(item.price)}</span>
+      <div class="flex items-center gap-2 py-2 border-b border-gray-100 dark:border-slate-700/60 last:border-0">
+        <span class="flex-1 text-xs text-slate-700 dark:text-slate-300 truncate font-medium">${esc(item.name)}</span>
+        <span class="text-xs font-bold text-slate-400 dark:text-slate-500">${fmtPrice(item.price)}</span>
         ${item.is_featured ? '<span title="Odporúčame" class="text-xs">⭐</span>' : ''}
         <button onclick="openItemModal(${item.id},${cat.id})"
-                class="text-slate-400 hover:text-indigo-600 text-xs px-1 transition"
+                class="text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xs px-1 transition"
                 title="Upraviť">✏️</button>
         <button onclick="deleteItemData(${item.id},'${esc(item.name)}')"
-                class="text-slate-400 hover:text-red-500 text-xs px-1 transition"
+                class="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 text-xs px-1 transition"
                 title="Zmazať">🗑️</button>
       </div>`).join('');
     return `
-      <div class="rounded-2xl border border-slate-100 overflow-hidden mb-3">
+      <div class="rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden mb-3">
         <div class="flex items-center gap-2 px-3 py-3" style="background:${catBg}">
           <span class="text-base leading-none" style="color:${catTc}">${esc(cat.icon)||'📁'}</span>
           <span class="font-bold text-sm flex-1 truncate" style="color:${catTc}">${esc(cat.name)}</span>
@@ -1076,11 +1217,13 @@ function renderMenuTree() {
                   style="background:rgba(${catTc==='#ffffff'?'255,255,255':'0,0,0'},.15);color:${catTc}"
                   title="Zmazať kategóriu">🗑️</button>
         </div>
-        <div class="px-3 pt-1 pb-2">
+        <div class="px-3 pt-1 pb-2 bg-white dark:bg-slate-900">
           ${items}
           <button onclick="openItemModal(null,${cat.id})"
-                  class="mt-2 w-full py-2 border border-dashed border-slate-200 rounded-xl
-                         text-xs text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition">
+                  class="mt-2 w-full py-2 border border-dashed border-gray-200 dark:border-slate-700 rounded-xl
+                         text-xs text-slate-400 dark:text-slate-500
+                         hover:text-indigo-600 dark:hover:text-indigo-400
+                         hover:border-indigo-300 dark:hover:border-indigo-700 transition">
             + Pridať jedlo
           </button>
         </div>
@@ -1241,6 +1384,19 @@ function toast(msg, type = 'info') {
 // ── Init ──────────────────────────────────────────────────────────
 updatePreview();
 if (menuData.categories.length) renderMenuTree();
+
+// ── Dark mode ─────────────────────────────────────────────────────
+const SVG_SUN  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
+const SVG_MOON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+function toggleDark() {
+  const on = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('gl-dark', on ? '1' : '0');
+  document.getElementById('dark-icon').innerHTML = on ? SVG_MOON : SVG_SUN;
+}
+(function() {
+  const on = document.documentElement.classList.contains('dark');
+  document.getElementById('dark-icon').innerHTML = on ? SVG_MOON : SVG_SUN;
+})();
 </script>
 </body>
 </html>

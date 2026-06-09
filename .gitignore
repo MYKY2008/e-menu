@@ -32,3 +32,6 @@ composer.lock
 
 # Node (if ever added)
 node_modules/
+
+# Uploaded venue assets
+uploads/venues/*
