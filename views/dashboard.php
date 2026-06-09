@@ -484,6 +484,23 @@ $EU_ALLERGENS = [
             + Kategória
           </button>
         </div>
+        <!-- Live search -->
+        <div class="mb-3 relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
+               viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input id="menu-search" type="search"
+                 placeholder="Hľadať jedlo alebo kategóriu…"
+                 oninput="menuSearchDebounced()"
+                 class="w-full pl-9 pr-4 py-2.5 bg-gray-100 dark:bg-slate-800 border-none rounded-xl
+                        text-sm text-slate-900 dark:text-slate-100
+                        placeholder-slate-400 dark:placeholder-slate-500
+                        focus:outline-none focus:ring-2 focus:ring-indigo-500
+                        transition-all duration-200">
+        </div>
+
         <div id="menu-tree">
           <p class="text-xs text-slate-400 text-center py-6">Načítavanie…</p>
         </div>
@@ -741,8 +758,8 @@ const PAL     = <?= json_encode(getPalette()) ?>;
 const GASTRO  = <?= json_encode($GASTRO_THEMES) ?>;   // [{bg, name}, ...]
 
 let menuData = {
-  categories: <?= json_encode($menuCategories, JSON_UNESCAPED_UNICODE) ?>,
-  settings:   <?= json_encode($menuSettings,   JSON_UNESCAPED_UNICODE) ?>,
+  categories: <?= json_encode($menuCategories, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+  settings:   <?= json_encode($menuSettings,   JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 };
 let currentVenueColor = <?= json_encode($selected ? $selected['color'] : 'black') ?>;
 let previewDark       = <?= json_encode((int)($menuSettings['dark_mode_default'] ?? 0) === 1) ?>;
@@ -1194,11 +1211,28 @@ function renderMenuTree() {
     el.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">Žiadne kategórie. Pridajte prvú.</p>';
     return;
   }
-  el.innerHTML = '<div id="sortable-cats">' + cats.map(cat => {
+
+  // Preserve accordion open states across re-renders
+  const openStates = {};
+  let firstRender = true;
+  document.querySelectorAll('#sortable-cats > [data-cat-id]').forEach(catEl => {
+    firstRender = false;
+    const body = catEl.querySelector('[id^="cat-body-"]');
+    if (body) openStates[catEl.dataset.catId] = body.dataset.open === 'true';
+  });
+
+  el.innerHTML = '<div id="sortable-cats">' + cats.map((cat, idx) => {
     const catBg = cat.bg_color || menuData.settings.default_category_color || '#1E3A5F';
     const catTc = yiq(catBg);
+    // First render: only first open. Re-renders: preserve state (new cats default open).
+    const isOpen = openStates[cat.id] !== undefined ? openStates[cat.id] : (firstRender ? idx === 0 : true);
+    const cvRot  = isOpen ? ' rotate-180' : '';
+    const CHEVRON = `<svg class="cat-chevron w-3 h-3 flex-shrink-0 transition-transform duration-200${cvRot}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
+
     const items = cat.items.map(item => `
-      <div data-item-id="${item.id}" class="flex items-center gap-2 py-2 border-b border-gray-100 dark:border-slate-700/60 last:border-0">
+      <div data-item-id="${item.id}"
+           data-search="${esc(item.name + ' ' + (item.description || ''))}"
+           class="cat-item-row flex items-center gap-2 py-2 border-b border-gray-100 dark:border-slate-700/60 last:border-0">
         <span class="drag-item-handle cursor-grab active:cursor-grabbing text-slate-300 dark:text-slate-600 hover:text-slate-400 flex-shrink-0 select-none">${DRAG_SVG}</span>
         <span class="flex-1 text-xs text-slate-700 dark:text-slate-300 truncate font-medium">${esc(item.name)}</span>
         <span class="text-xs font-bold text-slate-400 dark:text-slate-500">${fmtPrice(item.price)}</span>
@@ -1210,13 +1244,20 @@ function renderMenuTree() {
                 class="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 text-xs px-1 transition"
                 title="Zmazať">🗑️</button>
       </div>`).join('');
+
     return `
-      <div data-cat-id="${cat.id}" class="rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden mb-3">
+      <div data-cat-id="${cat.id}" data-cat-name="${esc(cat.name)}"
+           class="rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden mb-3">
         <div class="flex items-center gap-2 px-3 py-3" style="background:${catBg}">
           <span class="drag-cat-handle cursor-grab active:cursor-grabbing opacity-50 hover:opacity-90 flex-shrink-0 select-none" style="color:${catTc}">${DRAG_SVG}</span>
-          <span class="text-base leading-none" style="color:${catTc}">${esc(cat.icon)||'📁'}</span>
-          <span class="font-bold text-sm flex-1 truncate" style="color:${catTc}">${esc(cat.name)}</span>
-          <span class="text-xs opacity-60" style="color:${catTc}">${cat.items.length} jedál</span>
+          <button type="button" onclick="toggleCat(${cat.id})"
+                  class="flex items-center gap-2 flex-1 min-w-0 text-left focus:outline-none"
+                  style="color:${catTc}">
+            <span class="text-base leading-none">${esc(cat.icon)||'📁'}</span>
+            <span class="font-bold text-sm flex-1 truncate">${esc(cat.name)}</span>
+            <span class="text-xs opacity-60">${cat.items.length} jedál</span>
+            <span class="opacity-70">${CHEVRON}</span>
+          </button>
           <button onclick="openCatModal(${cat.id})"
                   class="p-1.5 rounded-lg transition opacity-80 hover:opacity-100 text-xs"
                   style="background:rgba(${catTc==='#ffffff'?'255,255,255':'0,0,0'},.15);color:${catTc}"
@@ -1226,17 +1267,19 @@ function renderMenuTree() {
                   style="background:rgba(${catTc==='#ffffff'?'255,255,255':'0,0,0'},.15);color:${catTc}"
                   title="Zmazať kategóriu">🗑️</button>
         </div>
-        <div class="sortable-items px-3 pt-1 pb-1 bg-white dark:bg-slate-900" data-cat-id="${cat.id}">
-          ${items}
-        </div>
-        <div class="px-3 pb-2 bg-white dark:bg-slate-900">
-          <button onclick="openItemModal(null,${cat.id})"
-                  class="w-full py-2 border border-dashed border-gray-200 dark:border-slate-700 rounded-xl
-                         text-xs text-slate-400 dark:text-slate-500
-                         hover:text-indigo-600 dark:hover:text-indigo-400
-                         hover:border-indigo-300 dark:hover:border-indigo-700 transition">
-            + Pridať jedlo
-          </button>
+        <div id="cat-body-${cat.id}" data-open="${isOpen}" class="${isOpen ? '' : 'hidden'}">
+          <div class="sortable-items px-3 pt-1 pb-1 bg-white dark:bg-slate-900" data-cat-id="${cat.id}">
+            ${items}
+          </div>
+          <div class="px-3 pb-2 bg-white dark:bg-slate-900">
+            <button onclick="openItemModal(null,${cat.id})"
+                    class="w-full py-2 border border-dashed border-gray-200 dark:border-slate-700 rounded-xl
+                           text-xs text-slate-400 dark:text-slate-500
+                           hover:text-indigo-600 dark:hover:text-indigo-400
+                           hover:border-indigo-300 dark:hover:border-indigo-700 transition">
+              + Pridať jedlo
+            </button>
+          </div>
         </div>
       </div>`;
   }).join('') + '</div>';
@@ -1289,6 +1332,55 @@ async function reorderApi(type, ids, venueSlug) {
   if (venueSlug) payload.venue_slug = venueSlug;
   const data = await menuApi(payload);
   if (!data.ok) toast(data.error || 'Chyba pri ukladaní poradia.', 'error');
+}
+
+// ── Accordion toggle ──────────────────────────────────────────────
+function toggleCat(catId) {
+  const body = document.getElementById('cat-body-' + catId);
+  if (!body) return;
+  const nowOpen = body.dataset.open !== 'true';
+  body.dataset.open = nowOpen;
+  body.classList.toggle('hidden', !nowOpen);
+  const chevron = body.previousElementSibling?.querySelector('.cat-chevron');
+  if (chevron) chevron.classList.toggle('rotate-180', nowOpen);
+}
+
+// ── Live search ───────────────────────────────────────────────────
+let _menuSearchTimer = null;
+function menuSearchDebounced() {
+  clearTimeout(_menuSearchTimer);
+  _menuSearchTimer = setTimeout(menuSearch, 180);
+}
+
+function menuSearch() {
+  const q = (document.getElementById('menu-search')?.value || '').trim().toLowerCase();
+  document.querySelectorAll('#sortable-cats > [data-cat-id]').forEach(catEl => {
+    const catName = (catEl.dataset.catName || '').toLowerCase();
+    const catNameMatches = !q || catName.includes(q);
+    const itemRows = catEl.querySelectorAll('.cat-item-row');
+    let anyItemVisible = false;
+
+    itemRows.forEach(row => {
+      const haystack = (row.dataset.search || '').toLowerCase();
+      const show = !q || catNameMatches || haystack.includes(q);
+      row.classList.toggle('hidden', !show);
+      if (show) anyItemVisible = true;
+    });
+
+    const catVisible = catNameMatches || anyItemVisible;
+    catEl.classList.toggle('hidden', !catVisible);
+
+    // Auto-expand categories that have matching results
+    if (q && catVisible) {
+      const body = document.getElementById('cat-body-' + catEl.dataset.catId);
+      if (body) {
+        body.dataset.open = 'true';
+        body.classList.remove('hidden');
+        const chevron = body.previousElementSibling?.querySelector('.cat-chevron');
+        if (chevron) chevron.classList.add('rotate-180');
+      }
+    }
+  });
 }
 
 // ── Live preview renderer ─────────────────────────────────────────

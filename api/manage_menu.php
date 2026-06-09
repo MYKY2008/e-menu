@@ -15,6 +15,7 @@ try {
     $raw     = (string)(file_get_contents('php://input') ?: '{}');
     $payload = json_decode($raw, true);
     if (!is_array($payload)) throw new InvalidArgumentException('Neplatný formát dát.');
+    $payload = purify($payload);
 
     if (!csrfValid((string)($payload['csrf'] ?? ''))) {
         http_response_code(403);

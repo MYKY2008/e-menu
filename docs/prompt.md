@@ -1,62 +1,49 @@
-# PROMPT: Implementácia systému "Zabudnuté heslo" (PHPMailer)
+# PROMPT: UX a Stabilita (Formuláre, 404 a Limity Textov)
 
-**CIEĽ:** Vytvoriť bezpečný a profesionálny systém na obnovu hesla pomocou e-mailových tokenov.
-
----
-
-### 🛠️ ÚLOHA 1: Príprava Databázy a Knižnice
-
-1.  **Migrácia Databázy (`config.php`):**
-    *   Pridaj SQL na vytvorenie tabuľky `password_resets`:
-        ```sql
-        CREATE TABLE IF NOT EXISTS password_resets (
-            email      TEXT NOT NULL,
-            token      TEXT NOT NULL,
-            expires_at INTEGER NOT NULL
-        )
-        ```
-2.  **Integrácia PHPMailer:**
-    *   Priprav v koreňovom priečinku priečinok `libs/PHPMailer/`.
-    *   Implementuj funkciu `sendEmail($to, $subject, $body)` v `config.php`, ktorá bude používať PHPMailer.
-    *   Pre účely testovania nastav SMTP na "dummy" hodnoty (localhost), ktoré si užívateľ neskôr zmení.
+**CIEĽ:** Zlepšiť používateľskú skúsenosť pri chybách, zabezpečiť správne fungovanie odkazov v podpriečinkoch a ochrániť databázu pred nadmerne dlhými textami.
 
 ---
 
-### 🛠️ ÚLOHA 2: Proces žiadosti o reset (Forgot Password)
+### 🛠️ ÚLOHA 1: Perzistencia dát vo formulároch (UX)
 
-1.  **Nový View (`views/forgot_password.php`):**
-    *   Jednoduchý, čistý formulár na zadanie e-mailu podľa `docs/dizajn.md`.
-    *   Link "Späť na prihlásenie".
-2.  **Logika odoslania (`auth/forgot_password_process.php`):**
-    *   Skontroluj, či e-mail existuje v tabuľke `users`.
-    *   Ak áno (alebo aj ak nie - kvôli bezpečnosti ukáž rovnakú správu):
-        *   Vymaž staré tokeny pre tento e-mail.
-        *   Vygeneruj bezpečný náhodný token: `bin2hex(random_bytes(32))`.
-        *   Ulož e-mail, token a `time() + 3600` (platnosť 1 hodina) do `password_resets`.
-        *   Pošli e-mail s linkom: `url('reset-password?token=' . $token)`.
+**Problém:** Pri chybe (napr. zlé heslo) sa používateľ vráti na prázdny formulár a musí znova vypisovať e-mail.
+
+**Inštrukcie:**
+1.  **Auth spracovanie (`auth/login.php`, `auth/register.php`):**
+    *   Pred presmerovaním späť na formulár ulož prijaté dáta (okrem hesla!) do session, napr. `$_SESSION['old_input'] = $_POST;`.
+2.  **Zobrazenie formulára (`views/login_page.php`, `views/register_page.php`):**
+    *   Pre políčko e-mailu nastav `value` z tejto session (ak existuje).
+    *   **Dôležité:** Po úspešnom vykreslení/použití túto session vymaž, aby tam nezostala pri ďalšom čistom otvorení stránky.
 
 ---
 
-### 🛠️ ÚLOHA 3: Proces zmeny hesla (Reset Password)
+### 🛠️ ÚLOHA 2: Zjednotenie 404 a Oprava URL adries
 
-1.  **Nový View (`views/reset_password.php`):**
-    *   Tento pohľad sa zobrazí len vtedy, ak je v URL platný token.
-    *   Formulár: "Nové heslo" a "Potvrďte heslo".
-2.  **Logika zmeny (`auth/reset_password_process.php`):**
-    *   Over token v databáze a skontroluj `expires_at`.
-    *   Ak je neplatný/expirovaný, vyhoď chybu a presmeruj na začiatok.
-    *   Ak je OK:
-        *   Zahašuj nové heslo (`password_hash`).
-        *   Aktualizuj tabuľku `users` pre daný e-mail.
-        *   **Dôležité:** Vymaž použitý token z `password_resets`.
-        *   Prihlás používateľa alebo ho pošli na login so správou o úspechu.
+**Problém:** Viaceré 404 stránky a statické odkazy (`href="/"`) nefungujú, ak je aplikácia v podpriečinku.
 
----
-
-### 🛠️ ÚLOHA 4: Integrácia do UI
-
-1.  **Login Page:** Pridaj pod prihlasovacie tlačidlo link "Zabudli ste heslo?".
-2.  **Routing:** Uprav `index.php`, aby spracovával nové trasy `/forgot-password` a `/reset-password`.
+**Inštrukcie:**
+1.  **Redizajn 404 (`views/404.php`):**
+    *   Prepracuj tento súbor podľa štandardov v `docs/dizajn.md`. Musí ladiť so zvyškom webu (minimalizmus, Inter font, centrovaný obsah).
+2.  **Router (`index.php`):**
+    *   V `default` prípade (nenájdená trasa) odstráň inline HTML a namiesto neho načítaj `require BASE_DIR . '/views/404.php';`.
+3.  **Audit Odkazov:**
+    *   Prejdi všetky súbory (`landing.php`, `404.php`, `client_view.php`, atď.).
+    *   Nahraď všetky statické odkazy typu `<a href="/">` za dynamické `<a href="<?= url() ?>">`. Používaj poctivo funkciu `url()` pre všetky interné prepojenia.
 
 ---
-**VÝSTUP:** Dodaj kód pre všetky nové súbory a úpravy existujúcich. Zabezpeč, aby e-mail vyzeral pekne a profesionálne (HTML e-mail).
+
+### 🛠️ ÚLOHA 3: Striktná validácia dĺžky textov
+
+**Problém:** Chýbajú limity na dĺžku popisov, čo môže rozbiť databázu alebo UI.
+
+**Inštrukcie:**
+1.  **API (`api/manage_menu.php` a `api/save_venue.php`):**
+    *   Zaveď striktné kontroly dĺžky reťazcov (`mb_strlen`) pri ukladaní a úprave.
+    *   **Limity:**
+        *   Názov prevádzky / kategórie / jedla: **max 100 znakov**.
+        *   Krátky popis jedla: **max 255 znakov**.
+        *   Dlhý/Detailný popis jedla: **max 1000 znakov**.
+    *   Ak používateľ prekročí limit, API musí vrátiť zrozumiteľnú chybovú správu (napr. *"Názov je príliš dlhý (max 100 znakov)"*).
+
+---
+**VÝSTUP:** Dodaj upravený kód pre dotknuté súbory (`index.php`, `auth/*.php`, `views/*.php`, `api/*.php`). Sústreď sa na čistotu kódu a perfektné UX.

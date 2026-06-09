@@ -16,6 +16,13 @@ try {
     $payload = json_decode($raw, true);
     if (!is_array($payload)) throw new InvalidArgumentException('Neplatný formát dát.');
 
+    // Purify text fields; preserve raw image data — it is validated by saveImageFile()
+    $rawLogo  = $payload['logo']        ?? null;
+    $rawCover = $payload['cover_image'] ?? null;
+    $payload  = purify($payload);
+    $payload['logo']        = $rawLogo;
+    $payload['cover_image'] = $rawCover;
+
     if (!csrfValid((string)($payload['csrf'] ?? ''))) {
         http_response_code(403);
         throw new RuntimeException('Bezpečnostná chyba (CSRF).');

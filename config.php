@@ -161,6 +161,17 @@ function e(mixed $v): string {
     return htmlspecialchars((string)$v, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
 
+// ── Input sanitization ────────────────────────────────────────
+function purify(mixed $data): mixed {
+    if (is_array($data)) {
+        return array_map('purify', $data);
+    }
+    if (is_string($data)) {
+        return strip_tags(trim($data));
+    }
+    return $data;
+}
+
 // ── URL helpers ───────────────────────────────────────────────
 /**
  * Build an absolute app URL.
@@ -222,11 +233,25 @@ function ensureUploadsDir(): void {
     }
 }
 
+function imageMimeFromBytes(string $data): ?string {
+    if (strlen($data) < 12) return null;
+    $b = $data;
+    if (str_starts_with($b, "\xFF\xD8\xFF"))                                     return 'image/jpeg';
+    if (str_starts_with($b, "\x89PNG\r\n\x1a\n"))                                return 'image/png';
+    if (str_starts_with($b, 'GIF87a') || str_starts_with($b, 'GIF89a'))          return 'image/gif';
+    if (str_starts_with($b, 'RIFF') && substr($b, 8, 4) === 'WEBP')              return 'image/webp';
+    return null;
+}
+
 function saveImageFile(string $base64, string $type): ?string {
     if (!preg_match('/^data:image\/(jpeg|jpg|png|webp|gif);base64,/i', $base64, $m)) return null;
     $ext  = strtolower($m[1] === 'jpeg' ? 'jpg' : $m[1]);
     $data = base64_decode(preg_replace('/^data:image\/[a-zA-Z+]+;base64,/', '', $base64));
     if (!$data) return null;
+
+    // Verify actual MIME type via magic bytes — prevents disguised PHP files
+    if (!imageMimeFromBytes($data)) return null;
+
     ensureUploadsDir();
     $name = $type . '_' . uniqid('', true) . '.' . $ext;
     $abs  = UPLOADS_DIR . DIRECTORY_SEPARATOR . $name;
