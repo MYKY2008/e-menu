@@ -45,9 +45,11 @@ if ($path !== '/' && str_ends_with($path, '/')) {
 // ── Handle POST for auth routes ───────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     match ($path) {
-        '/login'    => (static function () { require BASE_DIR . '/auth/login.php'; })(),
-        '/register' => (static function () { require BASE_DIR . '/auth/register.php'; })(),
-        default     => null,
+        '/login'            => (static function () { require BASE_DIR . '/auth/login.php'; })(),
+        '/register'         => (static function () { require BASE_DIR . '/auth/register.php'; })(),
+        '/forgot-password'  => (static function () { require BASE_DIR . '/auth/forgot_password_process.php'; })(),
+        '/reset-password'   => (static function () { require BASE_DIR . '/auth/reset_password_process.php'; })(),
+        default             => null,
     };
     // If a POST route was matched, auth files redirect and exit.
     // Fall through to GET rendering otherwise (e.g. validation failures re-render form).
@@ -74,6 +76,22 @@ switch (true) {
             exit;
         }
         require BASE_DIR . '/views/register_page.php';
+        break;
+
+    case $path === '/forgot-password':
+        if (isLoggedIn()) {
+            header('Location: ' . url('dashboard'));
+            exit;
+        }
+        require BASE_DIR . '/views/forgot_password.php';
+        break;
+
+    case $path === '/reset-password':
+        if (isLoggedIn()) {
+            header('Location: ' . url('dashboard'));
+            exit;
+        }
+        require BASE_DIR . '/views/reset_password.php';
         break;
 
     case $path === '/logout':

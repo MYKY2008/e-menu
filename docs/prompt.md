@@ -1,39 +1,62 @@
-# PROMPT: Hĺbkové Mazanie Údajov (Disk Cleanup & GDPR)
+# PROMPT: Implementácia systému "Zabudnuté heslo" (PHPMailer)
 
-**CIEĽ:** Zabezpečiť, aby pri vymazaní prevádzky (venue) alebo celého používateľa nezostali na serveri žiadne "sirotské" súbory (logá, cover fotky). Musíme fyzicky odstrániť súbory z priečinka `uploads/` pred tým, než sa vymažú záznamy z databázy.
-
----
-
-### 🛠️ ÚLOHA 1: Čistenie pri zmazaní prevádzky (Single Venue Cleanup)
-
-**Kde:** `api/save_venue.php` (akcia `delete`) a `api/admin_actions.php` (akcia `delete_venue`)
-
-**Inštrukcie:**
-1.  Pred samotným SQL príkazom `DELETE FROM venues...` urob nasledovné:
-    *   Vytiahni z databázy cesty k súborom pre daný slug (`logo`, `cover_image`).
-    *   Ak stĺpec obsahuje cestu k súboru (napr. `/uploads/venues/abc.png`) a tento súbor na disku reálne existuje, vymaž ho pomocou PHP funkcie `unlink()`.
-    *   Uisti sa, že nevymažeš súbor, ak je v DB uložený ako Base64 (kontrola na prefix `data:image`).
+**CIEĽ:** Vytvoriť bezpečný a profesionálny systém na obnovu hesla pomocou e-mailových tokenov.
 
 ---
 
-### 🛠️ ÚLOHA 2: Čistenie pri zmazaní používateľa (Mass Cleanup)
+### 🛠️ ÚLOHA 1: Príprava Databázy a Knižnice
 
-**Kde:** `api/admin_actions.php` (akcia `delete_user`)
+1.  **Migrácia Databázy (`config.php`):**
+    *   Pridaj SQL na vytvorenie tabuľky `password_resets`:
+        ```sql
+        CREATE TABLE IF NOT EXISTS password_resets (
+            email      TEXT NOT NULL,
+            token      TEXT NOT NULL,
+            expires_at INTEGER NOT NULL
+        )
+        ```
+2.  **Integrácia PHPMailer:**
+    *   Priprav v koreňovom priečinku priečinok `libs/PHPMailer/`.
+    *   Implementuj funkciu `sendEmail($to, $subject, $body)` v `config.php`, ktorá bude používať PHPMailer.
+    *   Pre účely testovania nastav SMTP na "dummy" hodnoty (localhost), ktoré si užívateľ neskôr zmení.
 
-**Inštrukcie:**
-1.  Aktuálne mazanie používateľa spolieha na `ON DELETE CASCADE` v databáze. To však neodstráni súbory na disku.
-2.  **Nová logika pred zmazaním používateľa:**
-    *   Nájdi v databáze všetky prevádzky (`slug`), ktoré patria danému `user_id`.
-    *   Pre každú jednu prevádzku vykonaj "čistenie disku" (vymaž jej logo a cover fotku z priečinka `uploads/`).
-    *   Až po fyzickom vymazaní všetkých súborov všetkých jeho prevádzok spusti SQL príkaz `DELETE FROM users WHERE id = ?`.
+---
+
+### 🛠️ ÚLOHA 2: Proces žiadosti o reset (Forgot Password)
+
+1.  **Nový View (`views/forgot_password.php`):**
+    *   Jednoduchý, čistý formulár na zadanie e-mailu podľa `docs/dizajn.md`.
+    *   Link "Späť na prihlásenie".
+2.  **Logika odoslania (`auth/forgot_password_process.php`):**
+    *   Skontroluj, či e-mail existuje v tabuľke `users`.
+    *   Ak áno (alebo aj ak nie - kvôli bezpečnosti ukáž rovnakú správu):
+        *   Vymaž staré tokeny pre tento e-mail.
+        *   Vygeneruj bezpečný náhodný token: `bin2hex(random_bytes(32))`.
+        *   Ulož e-mail, token a `time() + 3600` (platnosť 1 hodina) do `password_resets`.
+        *   Pošli e-mail s linkom: `url('reset-password?token=' . $token)`.
 
 ---
 
-### 🛠️ ÚLOHA 3: Ošetrenie chýb a bezpečnosť
+### 🛠️ ÚLOHA 3: Proces zmeny hesla (Reset Password)
 
-1.  **Cesty:** Pri mazaní súborov sa uisti, že cesty sú správne relatívne k `BASE_DIR`.
-2.  **Prevencia:** Ak súbor z nejakého dôvodu na disku chýba (bol už zmazaný manuálne), skript nesmie skončiť chybou (použi `@unlink()` alebo kontrolu `file_exists()`).
-3.  **Povolenia:** Skontroluj, či má webový server oprávnenie na mazanie v priečinku `uploads/`.
+1.  **Nový View (`views/reset_password.php`):**
+    *   Tento pohľad sa zobrazí len vtedy, ak je v URL platný token.
+    *   Formulár: "Nové heslo" a "Potvrďte heslo".
+2.  **Logika zmeny (`auth/reset_password_process.php`):**
+    *   Over token v databáze a skontroluj `expires_at`.
+    *   Ak je neplatný/expirovaný, vyhoď chybu a presmeruj na začiatok.
+    *   Ak je OK:
+        *   Zahašuj nové heslo (`password_hash`).
+        *   Aktualizuj tabuľku `users` pre daný e-mail.
+        *   **Dôležité:** Vymaž použitý token z `password_resets`.
+        *   Prihlás používateľa alebo ho pošli na login so správou o úspechu.
 
 ---
-**VÝSTUP:** Dodaj upravený kód pre `api/save_venue.php` a `api/admin_actions.php`. Zameraj sa na to, aby v systéme nezostal po zmazaní žiadny bordel na disku.
+
+### 🛠️ ÚLOHA 4: Integrácia do UI
+
+1.  **Login Page:** Pridaj pod prihlasovacie tlačidlo link "Zabudli ste heslo?".
+2.  **Routing:** Uprav `index.php`, aby spracovával nové trasy `/forgot-password` a `/reset-password`.
+
+---
+**VÝSTUP:** Dodaj kód pre všetky nové súbory a úpravy existujúcich. Zabezpeč, aby e-mail vyzeral pekne a profesionálne (HTML e-mail).

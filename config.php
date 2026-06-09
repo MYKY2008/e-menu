@@ -130,6 +130,12 @@ function getDB(): PDO {
     )");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address)");
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS password_resets (
+        email      TEXT    NOT NULL,
+        token      TEXT    NOT NULL,
+        expires_at INTEGER NOT NULL
+    )");
+
     return $pdo;
 }
 
@@ -340,5 +346,40 @@ function requireAdmin(): void {
         flash('Prístup zamietnutý.', 'error');
         header('Location: ' . url());
         exit;
+    }
+}
+
+// ── E-mail (PHPMailer) ────────────────────────────────────────
+function sendEmail(string $to, string $subject, string $htmlBody): bool {
+    require_once BASE_DIR . '/libs/PHPMailer/src/Exception.php';
+    require_once BASE_DIR . '/libs/PHPMailer/src/PHPMailer.php';
+    require_once BASE_DIR . '/libs/PHPMailer/src/SMTP.php';
+
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+        // ── SMTP settings — change these for production ──────
+        $mail->isSMTP();
+        $mail->Host       = defined('SMTP_HOST')     ? SMTP_HOST     : 'localhost';
+        $mail->Port       = defined('SMTP_PORT')     ? SMTP_PORT     : 25;
+        $mail->SMTPAuth   = defined('SMTP_USER')     ? true          : false;
+        $mail->Username   = defined('SMTP_USER')     ? SMTP_USER     : '';
+        $mail->Password   = defined('SMTP_PASS')     ? SMTP_PASS     : '';
+        $mail->SMTPSecure = defined('SMTP_SECURE')   ? SMTP_SECURE   : '';
+
+        $fromEmail = defined('MAIL_FROM')      ? MAIL_FROM      : 'noreply@gastrolink.sk';
+        $fromName  = defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'GastroLink QR';
+
+        $mail->setFrom($fromEmail, $fromName);
+        $mail->addAddress($to);
+        $mail->isHTML(true);
+        $mail->CharSet  = 'UTF-8';
+        $mail->Subject  = $subject;
+        $mail->Body     = $htmlBody;
+        $mail->AltBody  = strip_tags(str_replace(['<br>', '<br/>'], "\n", $htmlBody));
+        $mail->send();
+        return true;
+    } catch (\Exception $e) {
+        error_log('sendEmail error: ' . $e->getMessage());
+        return false;
     }
 }
