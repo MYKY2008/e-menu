@@ -1,23 +1,43 @@
 <!DOCTYPE html>
-<html lang="sk">
+<html lang="sk" class="">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>404 — Prevádzka nenájdená</title>
-<style>
-  body { font-family: system-ui, sans-serif; display: flex; align-items: center;
-         justify-content: center; min-height: 100vh; margin: 0; background: #f8fafc; }
-  .box { text-align: center; padding: 48px 32px; }
-  h1 { font-size: 5rem; font-weight: 900; color: #c7d2fe; margin: 0; }
-  p  { color: #6b7280; margin-top: 8px; }
-  a  { color: #4f46e5; text-decoration: none; font-weight: 600; }
-</style>
+<title>404 — Stránka nenájdená · GastroLink QR</title>
+
+<script>(function(){if(localStorage.getItem('gl-dark')==='1')document.documentElement.classList.add('dark')})();</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">
 </head>
-<body>
-<div class="box">
-  <h1>404</h1>
-  <p>Prevádzka s týmto odkazom neexistuje.</p>
-  <p style="margin-top:20px"><a href="/">GastroLink QR &rarr;</a></p>
+<body class="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col items-center justify-center p-5 transition-colors duration-200">
+
+<div class="w-full max-w-sm text-center">
+
+  <a href="<?= url() ?>" class="inline-block font-extrabold text-2xl tracking-tight mb-10">
+    <span class="text-indigo-600">GastroLink</span><span class="text-emerald-500">QR</span>
+  </a>
+
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-10">
+    <p class="text-7xl font-black text-indigo-100 dark:text-slate-800 leading-none mb-4">404</p>
+    <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">
+      Stránka nenájdená
+    </h1>
+    <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-8">
+      Hľadaná stránka neexistuje alebo bola presunutá.
+    </p>
+    <a href="<?= url() ?>"
+       class="inline-block w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold
+              py-3 rounded-2xl transition-all duration-200 active:scale-95
+              shadow-lg shadow-indigo-500/20 text-sm">
+      ← Späť na úvod
+    </a>
+  </div>
+
 </div>
+
 </body>
 </html>

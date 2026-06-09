@@ -62,8 +62,11 @@ try {
     if (!preg_match(SLUG_PATTERN, $slug)) {
         throw new InvalidArgumentException('Neplatný slug. Povolené: a–z, 0–9, pomlčka (min. 2 znaky).');
     }
-    if ($name === '' || strlen($name) > 800) {
-        throw new InvalidArgumentException('Názov podniku musí mať 1–200 znakov.');
+    if ($name === '') {
+        throw new InvalidArgumentException('Zadajte názov podniku.');
+    }
+    if (mb_strlen($name) > 100) {
+        throw new InvalidArgumentException('Názov podniku je príliš dlhý (max 100 znakov).');
     }
 
     $urlFields = ['menu_url' => 'Jedálny lístok', 'google_url' => 'Google Recenzie', 'instagram_url' => 'Instagram'];

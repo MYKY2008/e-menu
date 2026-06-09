@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
 <title>Dashboard — GastroLink QR</title>
 <!-- Anti-flash dark mode -->
 <script>(function(){if(localStorage.getItem('gl-dark')==='1')document.documentElement.classList.add('dark')})();</script>
@@ -816,25 +817,28 @@ document.getElementById('f-color-picker')?.addEventListener('input', function ()
 // ── Logo upload ───────────────────────────────────────────────────
 document.getElementById('f-logo-file')?.addEventListener('change', function () {
   const file = this.files[0]; if (!file) return;
-  const fr = new FileReader();
-  fr.onload = e => {
-    const img = new Image();
-    img.onload = () => {
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = 256;
-      const ctx = cv.getContext('2d');
-      const sz = Math.min(img.width, img.height);
-      ctx.drawImage(img, (img.width-sz)/2, (img.height-sz)/2, sz, sz, 0, 0, 256, 256);
-      const url = cv.toDataURL('image/jpeg', 0.85);
-      if (url.length > 700000) { toast('Logo je príliš veľké!', 'error'); return; }
-      document.getElementById('f-logo').value = url;
-      document.getElementById('logo-preview').src = url;
-      document.getElementById('logo-preview-wrap').classList.remove('hidden');
-      updatePreview();
-    };
-    img.src = e.target.result;
+  if (file.size > 1_000_000) toast('Obrázok je príliš veľký, automaticky ho optimalizujeme pre rýchle načítanie…', 'info');
+  const img = new Image();
+  const objUrl = URL.createObjectURL(file);
+  img.onload = () => {
+    const MAX = 512;
+    let w = img.width, h = img.height;
+    if (w > MAX || h > MAX) {
+      if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+      else        { w = Math.round(w * MAX / h); h = MAX; }
+    }
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(img, 0, 0, w, h);
+    const url = cv.toDataURL('image/jpeg', 0.8);
+    URL.revokeObjectURL(objUrl);
+    if (url.length > 700000) { toast('Logo je príliš veľké!', 'error'); return; }
+    document.getElementById('f-logo').value = url;
+    document.getElementById('logo-preview').src = url;
+    document.getElementById('logo-preview-wrap').classList.remove('hidden');
+    updatePreview();
   };
-  fr.readAsDataURL(file);
+  img.src = objUrl;
 });
 
 function clearLogo() {
@@ -845,28 +849,26 @@ function clearLogo() {
   updatePreview();
 }
 
-// ── Cover image upload (1200×400 crop center) ─────────────────────
+// ── Cover image upload ────────────────────────────────────────────
 document.getElementById('f-cover-file')?.addEventListener('change', function () {
   const file = this.files[0]; if (!file) return;
+  if (file.size > 2_000_000) toast('Obrázok je príliš veľký, automaticky ho optimalizujeme pre rýchle načítanie…', 'info');
   const img = new Image();
   const objUrl = URL.createObjectURL(file);
   img.onload = () => {
-    const TW = 1200, TH = 400;
+    const MAX_W = 1200;
+    let w = img.width, h = img.height;
+    if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
     const cv = document.createElement('canvas');
-    cv.width = TW; cv.height = TH;
-    const ctx = cv.getContext('2d');
-    const ir = img.width / img.height, tr = TW / TH;
-    let sx, sy, sw, sh;
-    if (ir > tr) { sh = img.height; sw = sh * tr; sx = (img.width - sw) / 2; sy = 0; }
-    else         { sw = img.width;  sh = sw / tr;  sx = 0; sy = (img.height - sh) / 2; }
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, TW, TH);
-    const url = cv.toDataURL('image/jpeg', 0.82);
-    if (url.length > 1_500_000) { toast('Cover fotka je príliš veľká (max 1 MB).', 'error'); URL.revokeObjectURL(objUrl); return; }
+    cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(img, 0, 0, w, h);
+    const url = cv.toDataURL('image/jpeg', 0.8);
+    URL.revokeObjectURL(objUrl);
+    if (url.length > 1_500_000) { toast('Cover fotka je príliš veľká (max 1 MB).', 'error'); return; }
     document.getElementById('f-cover').value = url;
     document.getElementById('cover-preview').src = url;
     document.getElementById('cover-preview-wrap').classList.remove('hidden');
     updatePreview();
-    URL.revokeObjectURL(objUrl);
   };
   img.src = objUrl;
 });

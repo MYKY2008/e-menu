@@ -122,12 +122,6 @@ switch (true) {
 
     default:
         http_response_code(404);
-        echo '<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8">'
-           . '<title>404</title><script src="https://cdn.tailwindcss.com"></script></head>'
-           . '<body class="min-h-screen flex items-center justify-center bg-slate-50">'
-           . '<div class="text-center"><p class="text-6xl mb-4">&#128269;</p>'
-           . '<h1 class="text-2xl font-bold text-slate-800">Stránka nenájdená</h1>'
-           . '<a href="' . e(url()) . '" class="mt-4 inline-block text-blue-600 hover:underline">'
-           . '← Späť na úvod</a></div></body></html>';
+        require BASE_DIR . '/views/404.php';
         break;
 }

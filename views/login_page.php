@@ -38,6 +38,8 @@
     <p class="text-slate-500 dark:text-slate-400 text-sm">Prihlásenie do panela</p>
   </div>
 
+  <?php $oldInput = $_SESSION['old_input'] ?? []; unset($_SESSION['old_input']); ?>
+
   <!-- Flash message -->
   <?php $flash = getFlash(); if ($flash): ?>
   <div class="mb-4 px-4 py-3 rounded-2xl text-sm font-medium
@@ -66,7 +68,8 @@
                  placeholder-slate-400 dark:placeholder-slate-500
                  focus:outline-none focus:ring-2 focus:ring-indigo-500
                  transition-all duration-200"
-          placeholder="vas@email.sk">
+          placeholder="vas@email.sk"
+          value="<?= e($oldInput['username'] ?? '') ?>">
       </div>
 
       <div class="mb-6">

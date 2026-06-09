@@ -19,18 +19,21 @@ $password2 = (string)($_POST['password2'] ?? '');
 
 // ── Validate input ────────────────────────────────────────────
 if (!filter_var($username, FILTER_VALIDATE_EMAIL)) {
+    $_SESSION['old_input'] = ['username' => $username];
     flash('Zadajte platný e-mail.', 'error');
     header('Location: ' . url('register'));
     exit;
 }
 
 if (strlen($password) < 8) {
+    $_SESSION['old_input'] = ['username' => $username];
     flash('Heslo musí mať aspoň 8 znakov.', 'error');
     header('Location: ' . url('register'));
     exit;
 }
 
 if ($password !== $password2) {
+    $_SESSION['old_input'] = ['username' => $username];
     flash('Heslá sa nezhodujú.', 'error');
     header('Location: ' . url('register'));
     exit;
@@ -42,6 +45,7 @@ $db = getDB();
 $st = $db->prepare("SELECT id FROM users WHERE username = ?");
 $st->execute([$username]);
 if ($st->fetch()) {
+    $_SESSION['old_input'] = ['username' => $username];
     flash('Tento e-mail je už zaregistrovaný.', 'error');
     header('Location: ' . url('register'));
     exit;

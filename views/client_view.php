@@ -18,7 +18,7 @@ if (!$venue) {
        . '<body class="min-h-screen flex items-center justify-center bg-gray-50">'
        . '<div class="text-center"><p class="text-5xl mb-4">🔍</p>'
        . '<h1 class="text-xl font-bold text-gray-900">Prevádzka neexistuje</h1>'
-       . '<a href="/" class="text-indigo-600 text-sm mt-3 block hover:underline">← Späť na úvod</a>'
+       . '<a href="' . url() . '" class="text-indigo-600 text-sm mt-3 block hover:underline">← Späť na úvod</a>'
        . '</div></body></html>';
     exit;
 }

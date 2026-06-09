@@ -127,6 +127,7 @@ try {
 
             if (!$slug) throw new InvalidArgumentException('Chýba slug prevádzky.');
             if ($name === '') throw new InvalidArgumentException('Zadajte názov kategórie.');
+            if (mb_strlen($name) > 100) throw new InvalidArgumentException('Názov kategórie je príliš dlhý (max 100 znakov).');
             $verifyVenue($slug);
 
             $maxSt = $db->prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM categories WHERE venue_slug = ?");
@@ -153,6 +154,7 @@ try {
 
             if ($id < 1) throw new InvalidArgumentException('Neplatné ID.');
             if ($name === '') throw new InvalidArgumentException('Zadajte názov kategórie.');
+            if (mb_strlen($name) > 100) throw new InvalidArgumentException('Názov kategórie je príliš dlhý (max 100 znakov).');
             $cat = $getCategory($id);
 
             $db->prepare("UPDATE categories SET name=?, icon=?, bg_color=? WHERE id=?")
@@ -190,6 +192,9 @@ try {
             $color    = $validColor($payload['bg_color'] ?? null);
 
             if ($name === '') throw new InvalidArgumentException('Zadajte názov jedla.');
+            if (mb_strlen($name) > 100) throw new InvalidArgumentException('Názov jedla je príliš dlhý (max 100 znakov).');
+            if (mb_strlen($desc) > 255) throw new InvalidArgumentException('Krátky popis je príliš dlhý (max 255 znakov).');
+            if (mb_strlen($detail) > 1000) throw new InvalidArgumentException('Detailný popis je príliš dlhý (max 1000 znakov).');
 
             $price = filter_var($payload['price'] ?? '', FILTER_VALIDATE_FLOAT);
             if ($price === false || $price < 0) {

@@ -17,6 +17,7 @@ $username = trim($_POST['username'] ?? '');
 $password = (string)($_POST['password'] ?? '');
 
 if ($username === '' || $password === '') {
+    $_SESSION['old_input'] = ['username' => $username];
     flash('Vyplňte e-mail aj heslo.', 'error');
     header('Location: ' . url('login'));
     exit;
@@ -33,6 +34,7 @@ $stCount = $db->prepare(
 );
 $stCount->execute([$ip, $windowStart]);
 if ((int)$stCount->fetchColumn() >= 5) {
+    $_SESSION['old_input'] = ['username' => $username];
     flash('Príliš veľa neúspešných pokusov. Skúste to znova o 15 minút.', 'error');
     header('Location: ' . url('login'));
     exit;
@@ -49,6 +51,7 @@ if (!$user || !password_verify($password, $user['password'])) {
     $db->prepare("INSERT INTO login_attempts (ip_address, timestamp) VALUES (?, ?)")
        ->execute([$ip, $now]);
 
+    $_SESSION['old_input'] = ['username' => $username];
     flash('Nesprávny e-mail alebo heslo.', 'error');
     header('Location: ' . url('login'));
     exit;
