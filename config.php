@@ -124,6 +124,12 @@ function getDB(): PDO {
     )");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_scans_venue_date ON scans(venue_slug, created_at)");
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS login_attempts (
+        ip_address TEXT    NOT NULL,
+        timestamp  INTEGER NOT NULL
+    )");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address)");
+
     return $pdo;
 }
 

@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com"></script>
-<script>tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','sans-serif']}}}}</script>
+<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
 *{-webkit-tap-highlight-color:transparent}
 .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
@@ -1178,6 +1178,13 @@ function openNewVenue() {
   switchTab('settings');
 }
 
+// ── Drag handle SVG (2×3 dots) ────────────────────────────────────
+const DRAG_SVG = `<svg class="w-3 h-4 pointer-events-none" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true">
+  <circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/>
+  <circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/>
+  <circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/>
+</svg>`;
+
 // ── Menu tree renderer ────────────────────────────────────────────
 function renderMenuTree() {
   const el = document.getElementById('menu-tree');
@@ -1187,11 +1194,12 @@ function renderMenuTree() {
     el.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">Žiadne kategórie. Pridajte prvú.</p>';
     return;
   }
-  el.innerHTML = cats.map(cat => {
+  el.innerHTML = '<div id="sortable-cats">' + cats.map(cat => {
     const catBg = cat.bg_color || menuData.settings.default_category_color || '#1E3A5F';
     const catTc = yiq(catBg);
     const items = cat.items.map(item => `
-      <div class="flex items-center gap-2 py-2 border-b border-gray-100 dark:border-slate-700/60 last:border-0">
+      <div data-item-id="${item.id}" class="flex items-center gap-2 py-2 border-b border-gray-100 dark:border-slate-700/60 last:border-0">
+        <span class="drag-item-handle cursor-grab active:cursor-grabbing text-slate-300 dark:text-slate-600 hover:text-slate-400 flex-shrink-0 select-none">${DRAG_SVG}</span>
         <span class="flex-1 text-xs text-slate-700 dark:text-slate-300 truncate font-medium">${esc(item.name)}</span>
         <span class="text-xs font-bold text-slate-400 dark:text-slate-500">${fmtPrice(item.price)}</span>
         ${item.is_featured ? '<span title="Odporúčame" class="text-xs">⭐</span>' : ''}
@@ -1203,8 +1211,9 @@ function renderMenuTree() {
                 title="Zmazať">🗑️</button>
       </div>`).join('');
     return `
-      <div class="rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden mb-3">
+      <div data-cat-id="${cat.id}" class="rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden mb-3">
         <div class="flex items-center gap-2 px-3 py-3" style="background:${catBg}">
+          <span class="drag-cat-handle cursor-grab active:cursor-grabbing opacity-50 hover:opacity-90 flex-shrink-0 select-none" style="color:${catTc}">${DRAG_SVG}</span>
           <span class="text-base leading-none" style="color:${catTc}">${esc(cat.icon)||'📁'}</span>
           <span class="font-bold text-sm flex-1 truncate" style="color:${catTc}">${esc(cat.name)}</span>
           <span class="text-xs opacity-60" style="color:${catTc}">${cat.items.length} jedál</span>
@@ -1217,10 +1226,12 @@ function renderMenuTree() {
                   style="background:rgba(${catTc==='#ffffff'?'255,255,255':'0,0,0'},.15);color:${catTc}"
                   title="Zmazať kategóriu">🗑️</button>
         </div>
-        <div class="px-3 pt-1 pb-2 bg-white dark:bg-slate-900">
+        <div class="sortable-items px-3 pt-1 pb-1 bg-white dark:bg-slate-900" data-cat-id="${cat.id}">
           ${items}
+        </div>
+        <div class="px-3 pb-2 bg-white dark:bg-slate-900">
           <button onclick="openItemModal(null,${cat.id})"
-                  class="mt-2 w-full py-2 border border-dashed border-gray-200 dark:border-slate-700 rounded-xl
+                  class="w-full py-2 border border-dashed border-gray-200 dark:border-slate-700 rounded-xl
                          text-xs text-slate-400 dark:text-slate-500
                          hover:text-indigo-600 dark:hover:text-indigo-400
                          hover:border-indigo-300 dark:hover:border-indigo-700 transition">
@@ -1228,7 +1239,56 @@ function renderMenuTree() {
           </button>
         </div>
       </div>`;
-  }).join('');
+  }).join('') + '</div>';
+  initSortable();
+}
+
+// ── Drag & Drop (SortableJS) ──────────────────────────────────────
+function initSortable() {
+  if (typeof Sortable === 'undefined') return;
+  const catContainer = document.getElementById('sortable-cats');
+  if (!catContainer) return;
+
+  new Sortable(catContainer, {
+    handle: '.drag-cat-handle',
+    animation: 150,
+    ghostClass: 'opacity-40',
+    onEnd() {
+      const newIds = [...catContainer.querySelectorAll(':scope > [data-cat-id]')]
+        .map(el => parseInt(el.dataset.catId));
+      const catMap = Object.fromEntries(menuData.categories.map(c => [c.id, c]));
+      menuData.categories = newIds.map(id => catMap[id]).filter(Boolean);
+      const slug = menuData.categories[0]?.venue_slug
+                || <?= json_encode($selected ? $selected['slug'] : '') ?>;
+      reorderApi('categories', newIds, slug);
+    },
+  });
+
+  document.querySelectorAll('.sortable-items').forEach(container => {
+    new Sortable(container, {
+      handle: '.drag-item-handle',
+      animation: 150,
+      ghostClass: 'opacity-40',
+      onEnd() {
+        const catId  = parseInt(container.dataset.catId);
+        const newIds = [...container.querySelectorAll(':scope > [data-item-id]')]
+          .map(el => parseInt(el.dataset.itemId));
+        const cat = menuData.categories.find(c => c.id === catId);
+        if (cat) {
+          const itemMap = Object.fromEntries(cat.items.map(i => [i.id, i]));
+          cat.items = newIds.map(id => itemMap[id]).filter(Boolean);
+        }
+        reorderApi('items', newIds, null);
+      },
+    });
+  });
+}
+
+async function reorderApi(type, ids, venueSlug) {
+  const payload = { csrf: CSRF, action: 'reorder', type, ids };
+  if (venueSlug) payload.venue_slug = venueSlug;
+  const data = await menuApi(payload);
+  if (!data.ok) toast(data.error || 'Chyba pri ukladaní poradia.', 'error');
 }
 
 // ── Live preview renderer ─────────────────────────────────────────

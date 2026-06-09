@@ -1,43 +1,39 @@
-# PROMPT: Odstránenie Tailwind CDN a Prechod na Produkčné CSS
+# PROMPT: Hĺbkové Mazanie Údajov (Disk Cleanup & GDPR)
 
-**CIEĽ:** Optimalizovať výkon celého projektu EMENU odstránením závislosti na `cdn.tailwindcss.com` a implementáciou statického, kompilovaného CSS súboru. Toto riešenie je nevyhnutné pre produkčné nasadenie (rýchlejšie načítanie, žiadne FOUC).
+**CIEĽ:** Zabezpečiť, aby pri vymazaní prevádzky (venue) alebo celého používateľa nezostali na serveri žiadne "sirotské" súbory (logá, cover fotky). Musíme fyzicky odstrániť súbory z priečinka `uploads/` pred tým, než sa vymažú záznamy z databázy.
+
+---
+
+### 🛠️ ÚLOHA 1: Čistenie pri zmazaní prevádzky (Single Venue Cleanup)
+
+**Kde:** `api/save_venue.php` (akcia `delete`) a `api/admin_actions.php` (akcia `delete_venue`)
+
+**Inštrukcie:**
+1.  Pred samotným SQL príkazom `DELETE FROM venues...` urob nasledovné:
+    *   Vytiahni z databázy cesty k súborom pre daný slug (`logo`, `cover_image`).
+    *   Ak stĺpec obsahuje cestu k súboru (napr. `/uploads/venues/abc.png`) a tento súbor na disku reálne existuje, vymaž ho pomocou PHP funkcie `unlink()`.
+    *   Uisti sa, že nevymažeš súbor, ak je v DB uložený ako Base64 (kontrola na prefix `data:image`).
 
 ---
 
-### 🛠️ ÚLOHA: Implementácia Tailwind CLI Build Procesu
+### 🛠️ ÚLOHA 2: Čistenie pri zmazaní používateľa (Mass Cleanup)
 
-**1. Príprava Súborovej Štruktúry:**
-*   Vytvor priečinok `assets/css/` v koreňovom adresári.
-*   Vytvor súbor `assets/css/input.css`, ktorý bude obsahovať základné Tailwind direktívy:
-    ```css
-    @tailwind base;
-    @tailwind components;
-    @tailwind utilities;
-    /* Tu môžeš pridať vlastné globálne štýly z config.php alebo šablón */
-    ```
+**Kde:** `api/admin_actions.php` (akcia `delete_user`)
 
-**2. Konfigurácia Tailwindu (`tailwind.config.js`):**
-*   Vytvor súbor `tailwind.config.js` v koreňovom adresári.
-*   Nastav parameter `content` tak, aby sledoval všetky PHP súbory v priečinkoch `views/`, `api/`, `auth/` a v koreňovom priečinku.
-*   Zahrň do konfigurácie aj `darkMode: 'class'`.
-
-**3. Úprava Šablón (Views):**
-*   Prejdi všetky súbory: `views/landing.php`, `views/dashboard.php`, `views/client_view.php`, `views/login_page.php`, `views/register_page.php` a ďalšie.
-*   **Odstráň** riadok `<script src="https://cdn.tailwindcss.com"></script>`.
-*   **Nahraď** ho odkazom na statický súbor: `<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">`.
-
-**4. Automatizácia pre Vývojára (Build Skripty & Integrácia):**
-*   Vytvor súbor `package.json` s nasledujúcimi skriptami pre npm:
-    *   `"build": "npx tailwindcss -i ./assets/css/input.css -o ./assets/css/style.css --minify"`
-    *   `"watch": "npx tailwindcss -i ./assets/css/input.css -o ./assets/css/style.css --watch"`
-*   **Úprava `run.bat` (Windows):**
-    *   Pred spustením PHP servera pridaj príkaz na **jednorazový build** (aby CSS existovalo).
-    *   Následne pridaj príkaz na spustenie **watchera na pozadí** (cez `start /b npx tailwindcss...`), aby sa CSS aktualizovalo pri každej zmene počas behu servera.
-*   **Úprava `start.sh` (Linux/Mac):**
-    *   Rovnaká logika: Pridaj jednorazový build a následne watcher na pozadí (použitím `&` na konci príkazu).
-
-**5. Clean-up:**
-*   Odstráň akékoľvek inline `<style>` bloky zo šablón, ktoré obsahovali Tailwind konfiguráciu (napr. `tailwind.config = ...`) a presuň ich do nového `tailwind.config.js`.
+**Inštrukcie:**
+1.  Aktuálne mazanie používateľa spolieha na `ON DELETE CASCADE` v databáze. To však neodstráni súbory na disku.
+2.  **Nová logika pred zmazaním používateľa:**
+    *   Nájdi v databáze všetky prevádzky (`slug`), ktoré patria danému `user_id`.
+    *   Pre každú jednu prevádzku vykonaj "čistenie disku" (vymaž jej logo a cover fotku z priečinka `uploads/`).
+    *   Až po fyzickom vymazaní všetkých súborov všetkých jeho prevádzok spusti SQL príkaz `DELETE FROM users WHERE id = ?`.
 
 ---
-**VÝSTUP:** Dodaj upravený kód pre všetky dotknuté PHP súbory, obsah `tailwind.config.js`, `input.css`, `package.json` a inštrukcie, ako si má užívateľ vygenerovať prvý `style.css`.
+
+### 🛠️ ÚLOHA 3: Ošetrenie chýb a bezpečnosť
+
+1.  **Cesty:** Pri mazaní súborov sa uisti, že cesty sú správne relatívne k `BASE_DIR`.
+2.  **Prevencia:** Ak súbor z nejakého dôvodu na disku chýba (bol už zmazaný manuálne), skript nesmie skončiť chybou (použi `@unlink()` alebo kontrolu `file_exists()`).
+3.  **Povolenia:** Skontroluj, či má webový server oprávnenie na mazanie v priečinku `uploads/`.
+
+---
+**VÝSTUP:** Dodaj upravený kód pre `api/save_venue.php` a `api/admin_actions.php`. Zameraj sa na to, aby v systéme nezostal po zmazaní žiadny bordel na disku.

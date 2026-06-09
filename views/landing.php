@@ -14,18 +14,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-tailwind.config = {
-  darkMode: 'class',
-  theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
-}
-</script>
-<style>
-*{-webkit-tap-highlight-color:transparent}
-.animate-float{animation:float 6s ease-in-out infinite}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-</style>
+<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">
 </head>
 <body class="bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 antialiased">
 

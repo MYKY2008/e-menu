@@ -46,6 +46,24 @@ if not exist "%~dp0index.php" (
 )
 echo [OK] index.php: OK
 
+:: CSS build (Tailwind CLI)
+where npx >nul 2>&1
+if %errorlevel%==0 (
+    echo.
+    echo [CSS] Buildujem Tailwind CSS...
+    if not exist "%~dp0node_modules" (
+        echo [CSS] npm install...
+        call npm install --silent
+    )
+    call npx tailwindcss -i ./assets/css/input.css -o ./assets/css/style.css --minify
+    echo [OK] CSS: assets/css/style.css
+    echo [CSS] Spustam watcher na pozadi...
+    start /b npx tailwindcss -i ./assets/css/input.css -o ./assets/css/style.css --watch
+) else (
+    echo [WARN] Node.js / npx nenajdene - CSS build preskoceny.
+    echo        Nainštaluj Node.js z https://nodejs.org alebo skopiruj style.css rucne.
+)
+
 echo.
 echo  URL : http://localhost:8080
 echo  Stop: Ctrl+C

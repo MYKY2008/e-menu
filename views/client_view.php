@@ -14,12 +14,30 @@ $venue = $vSt->fetch();
 if (!$venue) {
     http_response_code(404);
     echo '<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8"><title>Nenájdené</title>'
-       . '<script src="https://cdn.tailwindcss.com"></script></head>'
+       . '<link rel="stylesheet" href="' . url('assets/css/style.css') . '"></head>'
        . '<body class="min-h-screen flex items-center justify-center bg-gray-50">'
        . '<div class="text-center"><p class="text-5xl mb-4">🔍</p>'
        . '<h1 class="text-xl font-bold text-gray-900">Prevádzka neexistuje</h1>'
        . '<a href="/" class="text-indigo-600 text-sm mt-3 block hover:underline">← Späť na úvod</a>'
        . '</div></body></html>';
+    exit;
+}
+
+// ── HTTP caching (ETag / 304) ─────────────────────────────────
+$etag         = '"' . md5($venue['updated_at'] . $venue['slug']) . '"';
+$lastModified = gmdate('D, d M Y H:i:s \G\M\T', (int)strtotime((string)$venue['updated_at']));
+
+header('Cache-Control: public, max-age=0, must-revalidate');
+header('ETag: ' . $etag);
+header('Last-Modified: ' . $lastModified);
+
+$ifNoneMatch   = trim($_SERVER['HTTP_IF_NONE_MATCH']     ?? '');
+$ifModSince    = trim($_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '');
+
+if (($ifNoneMatch && $ifNoneMatch === $etag) ||
+    (!$ifNoneMatch && $ifModSince && strtotime($ifModSince) >= strtotime((string)$venue['updated_at']))) {
+    session_write_close();
+    http_response_code(304);
     exit;
 }
 
@@ -68,6 +86,15 @@ $defItemBg   = $settings['default_item_color']     ?? '#FFFFFF';
 // First letter avatar fallback
 $initial = mb_strtoupper(mb_substr($venue['name'], 0, 1));
 
+// Open Graph metadata
+$ogTitle    = 'Jedálny lístok — ' . $venue['name'];
+$ogDesc     = 'Pozrite si ponuku podniku ' . $venue['name'] . ' online.';
+$ogUrl      = rtrim(baseUrl(), '/') . '/r/' . $venue['slug'];
+$ogImageRaw = !empty($venue['cover_image']) ? $venue['cover_image']
+            : (!empty($venue['logo'])        ? $venue['logo'] : null);
+$ogImage    = ($ogImageRaw && !str_starts_with($ogImageRaw, 'data:'))
+              ? rtrim(baseUrl(), '/') . '/' . ltrim($ogImageRaw, '/') : '';
+
 $quickActions = [];
 if (!empty($venue['google_url']))    $quickActions[] = ['url'=>$venue['google_url'],    'emoji'=>'⭐','label'=>'Google'];
 if (!empty($venue['instagram_url'])) $quickActions[] = ['url'=>$venue['instagram_url'], 'emoji'=>'📷','label'=>'Instagram'];
@@ -95,8 +122,18 @@ $AL = [
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
-<meta name="description" content="Jedálny lístok — <?= e($venue['name']) ?>">
+<meta name="description" content="<?= e($ogDesc) ?>">
 <title><?= e($venue['name']) ?> — Menu</title>
+<!-- Open Graph / Social sharing -->
+<meta property="og:type"         content="website">
+<meta property="og:title"        content="<?= e($ogTitle) ?>">
+<meta property="og:description"  content="<?= e($ogDesc) ?>">
+<meta property="og:url"          content="<?= e($ogUrl) ?>">
+<?php if ($ogImage): ?><meta property="og:image" content="<?= e($ogImage) ?>"><?php endif; ?>
+<meta name="twitter:card"        content="summary_large_image">
+<meta name="twitter:title"       content="<?= e($ogTitle) ?>">
+<meta name="twitter:description" content="<?= e($ogDesc) ?>">
+<?php if ($ogImage): ?><meta name="twitter:image" content="<?= e($ogImage) ?>"><?php endif; ?>
 
 <!-- Anti-flash: set dark class before any render -->
 <script>
@@ -110,53 +147,14 @@ $AL = [
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com"></script>
-<script>tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','sans-serif']}}}}</script>
-
+<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">
 <style>
-*,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{scroll-behavior:smooth}
-
-.pt-safe{padding-top:max(1.25rem,env(safe-area-inset-top))}
-.pb-safe{padding-bottom:max(1.5rem,env(safe-area-inset-bottom))}
-
-.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
-.no-scrollbar::-webkit-scrollbar{display:none}
-
-/* Bottom sheet */
-.sheet{
-  transform:translateX(-50%) translateY(105%);
-  transition:transform .38s cubic-bezier(.32,.72,0,1);
-}
-.sheet.open{transform:translateX(-50%) translateY(0)}
-
-.overlay{opacity:0;pointer-events:none;transition:opacity .3s ease}
-.overlay.open{opacity:1;pointer-events:auto}
-
-/* Active category pill */
+/* Dynamic accent color for active nav pill (PHP-injected) */
 .cat-pill{transition:all .2s}
-.cat-pill.active{
-  background:<?= e($accentHex) ?> !important;
-  color:<?= e($accentText) ?> !important;
-}
-
-/* View transitions */
-@keyframes viewFadeIn{
-  from{opacity:0;transform:translateY(8px)}
-  to  {opacity:1;transform:translateY(0)}
-}
-.view-animate{animation:viewFadeIn .22s cubic-bezier(.32,.72,0,1) both}
-
-.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-
-/* Desktop: show the app as a phone-like widget */
-@media(min-width:30rem){
-  body{background:#f1f5f9}
-  html.dark body{background:#020617}
-}
+.cat-pill.active{background:<?= e($accentHex) ?> !important;color:<?= e($accentText) ?> !important}
 </style>
 </head>
-<body class="bg-gray-50 dark:bg-slate-950 min-h-screen">
+<body class="bg-gray-50 dark:bg-slate-950 min-h-screen client-bg">
 
 <!-- ══ APP SHELL ══════════════════════════════════════════════════ -->
 <div id="app"

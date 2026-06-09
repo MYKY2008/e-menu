@@ -13,14 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-tailwind.config = {
-  darkMode: 'class',
-  theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } }
-}
-</script>
-<style>*{-webkit-tap-highlight-color:transparent}</style>
+<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">
 </head>
 <body class="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col items-center justify-center p-5 transition-colors duration-200">
 

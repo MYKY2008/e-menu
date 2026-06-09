@@ -75,6 +75,12 @@ try {
         return preg_match('/^#[0-9a-fA-F]{6}$/', $c) ? $c : null;
     };
 
+    // Cache invalidation: bump updated_at so client ETags expire
+    $touchVenue = function(string $slug) use ($db): void {
+        $db->prepare("UPDATE venues SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE slug = ?")
+           ->execute([$slug]);
+    };
+
     // ── Helper: load full menu for a slug ─────────────────────
     $loadMenu = function(string $slug) use ($db): array {
         $catSt = $db->prepare("SELECT * FROM categories WHERE venue_slug = ? ORDER BY sort_order, id");
@@ -130,6 +136,7 @@ try {
                ->execute([$slug, $name, $icon, $color, $sortOrder]);
             $id = (int)$db->lastInsertId();
 
+            $touchVenue($slug);
             $menu = $loadMenu($slug);
             ob_end_clean();
             echo json_encode(array_merge(['ok' => true, 'id' => $id], $menu));
@@ -150,6 +157,7 @@ try {
             $db->prepare("UPDATE categories SET name=?, icon=?, bg_color=? WHERE id=?")
                ->execute([$name, $icon, $color, $id]);
 
+            $touchVenue($cat['venue_slug']);
             $menu = $loadMenu($cat['venue_slug']);
             ob_end_clean();
             echo json_encode(array_merge(['ok' => true], $menu));
@@ -162,6 +170,7 @@ try {
             if ($id < 1) throw new InvalidArgumentException('Neplatné ID.');
             $cat = $getCategory($id);
             $db->prepare("DELETE FROM categories WHERE id = ?")->execute([$id]);
+            $touchVenue($cat['venue_slug']);
             $menu = $loadMenu($cat['venue_slug']);
             ob_end_clean();
             echo json_encode(array_merge(['ok' => true], $menu));
@@ -214,6 +223,7 @@ try {
                 $slug   = $cat['venue_slug'];
             }
 
+            $touchVenue($slug);
             $menu = $loadMenu($slug);
             ob_end_clean();
             echo json_encode(array_merge(['ok' => true, 'id' => $itemId], $menu));
@@ -229,6 +239,7 @@ try {
             $catRow = $db->prepare("SELECT venue_slug FROM categories WHERE id = ?");
             $catRow->execute([$item['category_id']]);
             $slug = (string)$catRow->fetchColumn();
+            $touchVenue($slug);
             $menu = $loadMenu($slug);
             ob_end_clean();
             echo json_encode(array_merge(['ok' => true], $menu));
@@ -262,6 +273,54 @@ try {
                     default_item_color=excluded.default_item_color,
                     dark_mode_default=excluded.dark_mode_default
             ")->execute([$slug, $showAllergens, $showFeatured, $catColor, $itemColor, $darkDefault]);
+
+            $touchVenue($slug);
+            ob_end_clean();
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
+        // ── Reorder categories or items ───────────────────────
+        case 'reorder': {
+            $type = (string)($payload['type'] ?? '');
+            $ids  = array_values(array_filter(
+                array_map('intval', (array)($payload['ids'] ?? [])),
+                fn($id) => $id > 0
+            ));
+
+            if (!in_array($type, ['categories', 'items'], true)) {
+                throw new InvalidArgumentException('Neplatný typ radenia.');
+            }
+            if (empty($ids)) {
+                ob_end_clean();
+                echo json_encode(['ok' => true]);
+                exit;
+            }
+
+            if ($type === 'categories') {
+                $slug = sanitizeSlug((string)($payload['venue_slug'] ?? ''));
+                if (!$slug) throw new InvalidArgumentException('Chýba slug prevádzky.');
+                $verifyVenue($slug);
+
+                $db->beginTransaction();
+                $st = $db->prepare("UPDATE categories SET sort_order = ? WHERE id = ? AND venue_slug = ?");
+                foreach ($ids as $i => $id) { $st->execute([$i, $id, $slug]); }
+                $db->commit();
+                $touchVenue($slug);
+            } else {
+                $firstItem = $getItem($ids[0]);
+                $catRow    = $db->prepare("SELECT venue_slug FROM categories WHERE id = ?");
+                $catRow->execute([$firstItem['category_id']]);
+                $slug = (string)$catRow->fetchColumn();
+
+                $db->beginTransaction();
+                $st = $db->prepare(
+                    "UPDATE items SET sort_order = ? WHERE id = ? AND category_id = ?"
+                );
+                foreach ($ids as $i => $id) { $st->execute([$i, $id, $firstItem['category_id']]); }
+                $db->commit();
+                $touchVenue($slug);
+            }
 
             ob_end_clean();
             echo json_encode(['ok' => true]);

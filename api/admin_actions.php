@@ -76,10 +76,16 @@ try {
         case 'delete_user': {
             $uid = (int)($payload['user_id'] ?? 0);
             if ($uid < 1) throw new InvalidArgumentException('Neplatné ID.');
-            // Prevent admin from deleting themselves
             if ($uid === (int)$_SESSION['user_id']) {
                 throw new InvalidArgumentException('Nemôžete zmazať vlastný účet.');
             }
+            // Delete uploaded files for every venue owned by this user
+            $stVenues = $db->prepare("SELECT slug FROM venues WHERE user_id = ?");
+            $stVenues->execute([$uid]);
+            foreach ($stVenues->fetchAll() as $v) {
+                deleteVenueFiles($v['slug']);
+            }
+            // CASCADE removes venues, categories, items, scans
             $db->prepare("DELETE FROM users WHERE id = ?")->execute([$uid]);
             ob_end_clean();
             echo json_encode(['ok' => true]);
@@ -90,6 +96,7 @@ try {
         case 'delete_venue': {
             $slug = sanitizeSlug((string)($payload['slug'] ?? ''));
             if (!preg_match(SLUG_PATTERN, $slug)) throw new InvalidArgumentException('Neplatný slug.');
+            deleteVenueFiles($slug);
             $db->prepare("DELETE FROM venues WHERE slug = ?")->execute([$slug]);
             ob_end_clean();
             echo json_encode(['ok' => true]);

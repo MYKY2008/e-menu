@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Global resets ─────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Safe-area padding helpers (iPhone notch) ──────────────── */
+.pt-safe { padding-top: max(1.25rem, env(safe-area-inset-top)); }
+.pb-safe { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+
+/* ── Scrollbar hide ─────────────────────────────────────────── */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ── Bottom sheet (client_view) ─────────────────────────────── */
+.sheet {
+  transform: translateX(-50%) translateY(105%);
+  transition: transform .38s cubic-bezier(.32,.72,0,1);
+}
+.sheet.open { transform: translateX(-50%) translateY(0); }
+
+.overlay { opacity: 0; pointer-events: none; transition: opacity .3s ease; }
+.overlay.open { opacity: 1; pointer-events: auto; }
+
+/* ── View transition animation ──────────────────────────────── */
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.view-animate { animation: viewFadeIn .22s cubic-bezier(.32,.72,0,1) both; }
+
+/* ── Text clamp ─────────────────────────────────────────────── */
+.clamp2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Landing page float animation ───────────────────────────── */
+.animate-float { animation: float 6s ease-in-out infinite; }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+
+/* ── Desktop: app as phone widget (client_view) ─────────────── */
+@media (min-width: 30rem) {
+  body.client-bg { background: #f1f5f9; }
+  html.dark body.client-bg { background: #020617; }
+}

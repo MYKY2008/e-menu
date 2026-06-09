@@ -22,18 +22,41 @@ if ($username === '' || $password === '') {
     exit;
 }
 
-$db = getDB();
+$db  = getDB();
+$ip  = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+$now = time();
+$windowStart = $now - 900; // 15 minutes
+
+// ── Rate limit check ──────────────────────────────────────────────
+$stCount = $db->prepare(
+    "SELECT COUNT(*) FROM login_attempts WHERE ip_address = ? AND timestamp >= ?"
+);
+$stCount->execute([$ip, $windowStart]);
+if ((int)$stCount->fetchColumn() >= 5) {
+    flash('Príliš veľa neúspešných pokusov. Skúste to znova o 15 minút.', 'error');
+    header('Location: ' . url('login'));
+    exit;
+}
+
+// ── Verify credentials ────────────────────────────────────────────
 $st = $db->prepare("SELECT id, username, password, role, venue_limit FROM users WHERE username = ?");
 $st->execute([$username]);
 $user = $st->fetch();
 
 if (!$user || !password_verify($password, $user['password'])) {
+    // Record failed attempt + clean up old records (> 24 h)
+    $db->prepare("DELETE FROM login_attempts WHERE timestamp < ?")->execute([$now - 86400]);
+    $db->prepare("INSERT INTO login_attempts (ip_address, timestamp) VALUES (?, ?)")
+       ->execute([$ip, $now]);
+
     flash('Nesprávny e-mail alebo heslo.', 'error');
     header('Location: ' . url('login'));
     exit;
 }
 
-// Regenerate session ID to prevent fixation
+// ── Success: clear attempts for this IP ───────────────────────────
+$db->prepare("DELETE FROM login_attempts WHERE ip_address = ?")->execute([$ip]);
+
 session_regenerate_id(true);
 
 $_SESSION['user_id']     = (int)$user['id'];
