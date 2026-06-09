@@ -585,8 +585,10 @@ $AL = [
       <div id="sheet-img-wrap" class="hidden -mx-5 -mt-5 mb-5">
         <img id="sheet-img" src="" alt="" class="w-full object-cover" style="max-height:200px">
       </div>
+      <p id="sheet-short-desc"
+         class="text-sm font-medium text-gray-700 dark:text-slate-300 leading-relaxed mb-2 hidden"></p>
       <p id="sheet-desc"
-         class="text-sm text-gray-500 dark:text-slate-400 leading-relaxed hidden"></p>
+         class="text-sm italic text-gray-400 dark:text-slate-500 leading-relaxed hidden"></p>
       <div id="sheet-allergens"
            class="hidden mt-5 pt-4 border-t border-gray-100 dark:border-slate-800">
         <h3 class="text-[10px] font-black uppercase tracking-[.12em] mb-3
@@ -710,9 +712,12 @@ function openSheet(item) {
   item.weight ? (wEl.textContent = item.weight, wEl.classList.remove('hidden')) : wEl.classList.add('hidden');
   document.getElementById('sheet-price').textContent =
     parseFloat(item.price || 0).toFixed(2).replace('.', ',') + ' €';
-  const desc = String(item.detail_description || '').trim() || String(item.description || '').trim();
-  const dEl = document.getElementById('sheet-desc');
-  desc ? (dEl.textContent = desc, dEl.classList.remove('hidden')) : dEl.classList.add('hidden');
+  const shortDesc = String(item.description        || '').trim();
+  const longDesc  = String(item.detail_description || '').trim();
+  const sdEl = document.getElementById('sheet-short-desc');
+  const dEl  = document.getElementById('sheet-desc');
+  shortDesc ? (sdEl.textContent = shortDesc, sdEl.classList.remove('hidden')) : sdEl.classList.add('hidden');
+  longDesc  ? (dEl.textContent  = longDesc,  dEl.classList.remove('hidden'))  : dEl.classList.add('hidden');
   const imgWrap = document.getElementById('sheet-img-wrap');
   const imgEl   = document.getElementById('sheet-img');
   if (item.image && imgWrap && imgEl) {
