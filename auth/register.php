@@ -55,20 +55,30 @@ if ($st->fetch()) {
 $count = (int)$db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $role  = ($count === 0) ? 'admin' : 'user';
 
-$hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+$hash  = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+$token = bin2hex(random_bytes(32));
 
-$db->prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)")
-   ->execute([$username, $hash, $role]);
+$db->prepare("INSERT INTO users (username, password, role, is_verified, verify_token) VALUES (?, ?, ?, 0, ?)")
+   ->execute([$username, $hash, $role, $token]);
 
-$userId = (int)$db->lastInsertId();
+$verifyLink = url('verify') . '?token=' . $token;
+$emailSent  = sendEmail(
+    $username,
+    'Aktivujte svoj účet — GastroLink QR',
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Inter,sans-serif;background:#f8fafc;margin:0;padding:40px 20px">'
+    . '<div style="max-width:480px;margin:0 auto;background:#fff;border-radius:24px;padding:40px;box-shadow:0 4px 24px rgba(0,0,0,.06)">'
+    . '<h1 style="font-size:22px;font-weight:800;color:#1e293b;margin:0 0 8px">Vitajte v GastroLink QR!</h1>'
+    . '<p style="color:#64748b;margin:0 0 24px">Váš účet bol vytvorený. Kliknite na tlačidlo nižšie a aktivujte ho.</p>'
+    . '<a href="' . e($verifyLink) . '" style="display:inline-block;padding:14px 28px;background:#4f46e5;color:#fff;border-radius:14px;text-decoration:none;font-weight:700;font-size:15px">Aktivovať účet →</a>'
+    . '<p style="margin-top:24px;color:#94a3b8;font-size:13px">Ak ste si účet nevytvorili vy, tento e-mail ignorujte.</p>'
+    . '</div></body></html>'
+);
 
-session_regenerate_id(true);
-$_SESSION['user_id']     = $userId;
-$_SESSION['username']    = $username;
-$_SESSION['user_role']   = $role;
-$_SESSION['venue_limit'] = 1;
-
-flash('Vitajte v GastroLink QR! Účet bol vytvorený.', 'success');
-$target = ($role === 'admin') ? url('admin') : url('dashboard');
-header('Location: ' . $target);
+flash(
+    $emailSent
+        ? 'Registrácia úspešná! Skontrolujte e-mail a aktivujte účet.'
+        : 'Účet bol vytvorený. Odoslanie aktivačného e-mailu zlyhalo — kontaktujte podporu.',
+    $emailSent ? 'success' : 'error'
+);
+header('Location: ' . url('login'));
 exit;

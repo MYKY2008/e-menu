@@ -93,6 +93,37 @@ try {
             exit;
         }
 
+        // ── Create user (admin-created, auto-verified) ────────
+        case 'create_user': {
+            $email = strtolower(trim($payload['username'] ?? ''));
+            $pass  = (string)($payload['password']    ?? '');
+            $role  = in_array($payload['role'] ?? '', ['admin', 'user'], true)
+                     ? $payload['role'] : 'user';
+            $limit = max(0, min(9999, (int)($payload['venue_limit'] ?? 1)));
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                throw new InvalidArgumentException('Neplatný e-mail.');
+            }
+            if (strlen($pass) < 8) {
+                throw new InvalidArgumentException('Heslo musí mať aspoň 8 znakov.');
+            }
+            $hash = password_hash($pass, PASSWORD_BCRYPT, ['cost' => 12]);
+            try {
+                $db->prepare(
+                    "INSERT INTO users (username, password, role, venue_limit, is_verified)
+                     VALUES (?, ?, ?, ?, 1)"
+                )->execute([$email, $hash, $role, $limit]);
+            } catch (PDOException $ex) {
+                if (str_contains($ex->getMessage(), 'UNIQUE')) {
+                    throw new InvalidArgumentException("E-mail \"$email\" je už zaregistrovaný.");
+                }
+                throw $ex;
+            }
+            $newId = (int)$db->lastInsertId();
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'id' => $newId, 'email' => $email, 'role' => $role, 'limit' => $limit]);
+            exit;
+        }
+
         // ── Delete venue ──────────────────────────────────────
         case 'delete_venue': {
             $slug = sanitizeSlug((string)($payload['slug'] ?? ''));

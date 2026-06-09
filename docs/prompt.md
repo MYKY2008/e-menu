@@ -1,61 +1,70 @@
-# MASTER PROMPT: Finálne Prémiové Vylepšenia (v1.0)
+# PROMPT: Finálne "Production-Ready" Úpravy
 
-**CIEĽ:** Posunúť projekt EMENU na úroveň prémiovej služby pridaním vizuálnych fotiek jedál, zlepšením interaktivity pre zákazníka a zabezpečením dát pre administrátora.
-
----
-
-### 📷 ÚLOHA 1: Obrázky k jednotlivým jedlám
-
-**1. Databáza (`config.php`):**
-*   Pridaj SQL migráciu: `ALTER TABLE items ADD COLUMN image TEXT DEFAULT NULL`.
-**2. API (`api/manage_menu.php`):**
-*   V akcii `save_item` spracuj prichádzajúci Base64 obrázok.
-*   Použi existujúcu logiku `saveImageFile($base64, 'item')` na uloženie na disk a do DB ulož cestu.
-*   Pri zmazaní jedla (`delete_item`) zabezpeč vymazanie obrázku z disku cez `deleteImageFile()`.
-**3. Dashboard (`views/dashboard.php`):**
-*   Pridaj do formulára jedla možnosť nahrať fotku (s kompresiou na max 600px šírku cez canvas, podobne ako pri logu).
-**4. Client View (`views/client_view.php`):**
-*   Zobraz malú, vkusnú fotku (náhľad) vedľa názvu jedla. Po kliknutí na fotku/jedlo sa môže otvoriť modálne okno s veľkou fotkou a detailným popisom.
+**CIEĽ:** Zabezpečiť bezproblémové komerčné nasadenie aplikácie. Úloha zahŕňa bezpečnú konfiguráciu, ochranu pred cache problémami, údržbu databázy, funkciu exportu a možnosť zmeny hesla pre bežného používateľa.
 
 ---
 
-### 🧪 ÚLOHA 2: Interaktívna Legenda Alergénov
+### ⚙️ ÚLOHA 1: Environment Konfigurácia (`.env`)
 
-**Kde:** `views/client_view.php`
+**Kde:** Vytvorenie nového súboru `.env` a úprava `config.php`
 
 **Inštrukcie:**
-1.  Namiesto statického zoznamu čísel urob čísla alergénov pri jedle klikateľné.
-2.  **UX:** Po kliknutí na číslo alergénu (napr. "7") sa zobrazí elegantné malé modálne okno alebo Tailwind "popover", ktorý vysvetlí, o aký alergén ide (napr. *"7 - Mlieko a mliečne výrobky"*).
-3.  Zabezpeč, aby zákazník nemusel scrolovať na koniec stránky kvôli legende.
+1.  Napíš malú funkciu v `config.php` na parsovanie `.env` súboru (nepotrebujeme veľkú knižnicu, stačí prečítať riadky a naplniť `$_ENV`).
+2.  Presuň všetky citlivé a konfiguračné dáta (SMTP prihlasovacie údaje, URL domény) z `config.php` do nového vzorového súboru `.env.example`.
+3.  V `config.php` používaj na tieto hodnoty `$_ENV['KLUC']` (s defaultnými fallbackmi).
 
 ---
 
-### 🔍 ÚLOHA 3: Vyhľadávanie v menu pre zákazníka
+### 🔄 ÚLOHA 2: Verzovanie Assetov (Cache Busting)
 
-**Kde:** `views/client_view.php`
+**Kde:** `config.php` (funkcia `url()`) a šablóny
 
 **Inštrukcie:**
-1.  Pridaj do hlavičky menu (vedľa loga alebo pod názov) ikonu lupy.
-2.  Po kliknutí sa vysunie/zobrazí vyhľadávacie pole.
-3.  Implementuj **Live Search** (Javascript): Pri písaní sa v reálnom čase filtrujú jedlá. Ak kategória neobsahuje žiadne jedlo zodpovedajúce hľadaniu, celá kategória sa skryje.
+1.  Uprav logiku alebo vytvor novú funkciu `asset(string $path)`, ktorá k ceste na súbor pridá query parameter s časom poslednej modifikácie súboru.
+    *   *Príklad:* Namiesto `style.css` vráti `style.css?v=1715342100` (hodnota z funkcie `filemtime()`).
+2.  Prejdi všetky šablóny (Views) a nahraď volanie `url('assets/css/style.css')` za `asset('assets/css/style.css')`. Toto zabezpečí, že po nahratí nových štýlov sa zákazníkom okamžite prejaví zmena bez nutnosti mazať cache v prehliadači.
 
 ---
 
-### 💾 ÚLOHA 4: Zálohovanie Databázy (Admin)
+### 🧹 ÚLOHA 3: Automatické čistenie Databázy (Garbage Collector)
 
-**Kde:** `views/admin.php` a `api/admin_actions.php`
+**Kde:** `config.php`
 
 **Inštrukcie:**
-1.  V admin paneli pridaj tlačidlo **"Stiahnuť zálohu databázy (.db)"**.
-2.  Vytvor novú akciu v `admin_actions.php` (alebo samostatný malý skript), ktorý:
-    *   Overí, či je používateľ admin.
-    *   Nastaví HTTP hlavičky pre sťahovanie súboru (`Content-Type: application/x-sqlite3`, `Content-Disposition: attachment`).
-    *   Použije `readfile()` na odoslanie súboru `gastrolink.db` používateľovi.
+1.  Na koniec súboru `config.php` (alebo do vhodnej funkcie, ktorá sa volá často) pridaj jednoduchý "Lottery" systém.
+2.  Napríklad `if (mt_rand(1, 100) === 1)` (1% šanca pri každom načítaní).
+3.  Ak podmienka prejde, spusti SQL dotaz, ktorý vymaže:
+    *   Všetky záznamy z `password_resets`, kde je `expires_at < time()`.
+    *   Všetky záznamy z `login_attempts` staršie ako 24 hodín.
+    *   (Zabezpeč, aby táto funkcia nespomaľovala kritické dopyty, prípadne použi `@` pre potlačenie chýb, ak by sa náhodou zosypala).
 
 ---
 
-### 🎨 DIZAJNOVÁ POŽIADAVKA
-Všetky nové prvky (modálne okná, vyhľadávacie pole, tlačidlá) musia **STRIKTNE** dodržiavať `docs/dizajn.md` (zaoblenie `rounded-[2rem]`, Inter font, jemné tiene).
+### 📊 ÚLOHA 4: Export Menu do CSV pre Majiteľa
+
+**Kde:** `views/dashboard.php` a `api/manage_menu.php`
+
+**Inštrukcie:**
+1.  Do Dashboardu pridaj tlačidlo **"Exportovať Menu (CSV)"**.
+2.  V `manage_menu.php` (alebo v novom endpoint) vytvor akciu `export_csv`.
+3.  Logika:
+    *   Vytiahni všetky kategórie a jedlá pre vybranú prevádzku.
+    *   Vygeneruj CSV súbor so stĺpcami: `Kategória`, `Názov jedla`, `Popis`, `Cena`, `Alergény`.
+    *   Pošli správne HTTP hlavičky (`Content-Type: text/csv`, `Content-Disposition: attachment; filename="menu.csv"`) a vypíš obsah.
 
 ---
-**VÝSTUP:** Kompletný upravený kód pre `config.php`, `api/manage_menu.php`, `views/dashboard.php`, `views/client_view.php`, `views/admin.php` a `api/admin_actions.php`.
+
+### 🛡️ ÚLOHA 5: Zmena hesla v Profile (Dashboard)
+
+**Kde:** `views/dashboard.php` a nová akcia v API
+
+**Inštrukcie:**
+1.  V Dashboarde (napr. pod zoznamom prevádzok alebo v novej sekcii "Môj Profil") vytvor jednoduchý formulár na zmenu hesla.
+2.  **Polia:** Staré heslo, Nové heslo, Zopakovať nové heslo.
+3.  **Logika:**
+    *   Endpoint musí najprv overiť `Staré heslo` (cez `password_verify` s aktuálnym heslom z DB pre dané `$_SESSION['user_id']`).
+    *   Ak sedí a "Nové heslo" spĺňa dĺžku (8 znakov) a zhoduje sa s kontrolou, zahašuj ho a urob `UPDATE` v DB.
+    *   Zobraz používateľovi peknú Toast/Flash správu o úspechu.
+
+---
+**VÝSTUP:** Dodaj kód pre `.env.example`, úpravy v `config.php`, aktualizované šablóny s `asset()` funkciou a kód pre CSV export a zmenu hesla.

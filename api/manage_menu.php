@@ -15,7 +15,9 @@ try {
     $raw     = (string)(file_get_contents('php://input') ?: '{}');
     $payload = json_decode($raw, true);
     if (!is_array($payload)) throw new InvalidArgumentException('Neplatný formát dát.');
+    $rawItemImage = $payload['image'] ?? null;
     $payload = purify($payload);
+    $payload['image'] = $rawItemImage;
 
     if (!csrfValid((string)($payload['csrf'] ?? ''))) {
         http_response_code(403);
@@ -210,21 +212,51 @@ try {
             sort($allergenNums);
             $allergens = implode(',', $allergenNums);
 
+            // ── Image processing ──────────────────────────────────
+            $rawImage = $payload['image'] ?? null;
+
             if ($itemId > 0) {
-                $item = $getItem($itemId);
+                $item         = $getItem($itemId);
+                $currentImage = $item['image'] ?? null;
+
+                if (!is_string($rawImage) || $rawImage === '') {
+                    deleteImageFile($currentImage);
+                    $image = null;
+                } elseif (str_starts_with($rawImage, 'data:image')) {
+                    if (strlen($rawImage) > MAX_ITEM_BYTES) {
+                        throw new InvalidArgumentException('Fotka jedla je príliš veľká (max 700 KB).');
+                    }
+                    $savedPath = saveImageFile($rawImage, 'item');
+                    if (!$savedPath) throw new InvalidArgumentException('Neplatný formát fotky jedla.');
+                    deleteImageFile($currentImage);
+                    $image = $savedPath;
+                } else {
+                    $image = $rawImage;
+                }
+
                 $db->prepare("UPDATE items SET name=?, description=?, detail_description=?, price=?,
-                    weight=?, allergens=?, bg_color=?, is_featured=? WHERE id=?")
-                   ->execute([$name, $desc, $detail, $price, $weight, $allergens, $color, $featured, $itemId]);
-                // Reload venue slug via category
+                    weight=?, allergens=?, bg_color=?, is_featured=?, image=? WHERE id=?")
+                   ->execute([$name, $desc, $detail, $price, $weight, $allergens, $color, $featured, $image, $itemId]);
                 $catRow = $db->prepare("SELECT venue_slug FROM categories WHERE id = ?");
                 $catRow->execute([$item['category_id']]);
                 $slug = (string)$catRow->fetchColumn();
             } else {
                 if ($catId < 1) throw new InvalidArgumentException('Chýba ID kategórie.');
                 $cat = $getCategory($catId);
+
+                $image = null;
+                if (is_string($rawImage) && str_starts_with($rawImage, 'data:image')) {
+                    if (strlen($rawImage) > MAX_ITEM_BYTES) {
+                        throw new InvalidArgumentException('Fotka jedla je príliš veľká (max 700 KB).');
+                    }
+                    $savedPath = saveImageFile($rawImage, 'item');
+                    if (!$savedPath) throw new InvalidArgumentException('Neplatný formát fotky jedla.');
+                    $image = $savedPath;
+                }
+
                 $db->prepare("INSERT INTO items (category_id,name,description,detail_description,
-                    price,weight,allergens,bg_color,is_featured) VALUES (?,?,?,?,?,?,?,?,?)")
-                   ->execute([$catId, $name, $desc, $detail, $price, $weight, $allergens, $color, $featured]);
+                    price,weight,allergens,bg_color,is_featured,image) VALUES (?,?,?,?,?,?,?,?,?,?)")
+                   ->execute([$catId, $name, $desc, $detail, $price, $weight, $allergens, $color, $featured, $image]);
                 $itemId = (int)$db->lastInsertId();
                 $slug   = $cat['venue_slug'];
             }
@@ -241,6 +273,7 @@ try {
             $id = (int)($payload['id'] ?? 0);
             if ($id < 1) throw new InvalidArgumentException('Neplatné ID.');
             $item = $getItem($id);
+            deleteImageFile($item['image'] ?? null);
             $db->prepare("DELETE FROM items WHERE id = ?")->execute([$id]);
             $catRow = $db->prepare("SELECT venue_slug FROM categories WHERE id = ?");
             $catRow->execute([$item['category_id']]);

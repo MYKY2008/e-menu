@@ -41,7 +41,7 @@ if ((int)$stCount->fetchColumn() >= 5) {
 }
 
 // ── Verify credentials ────────────────────────────────────────────
-$st = $db->prepare("SELECT id, username, password, role, venue_limit FROM users WHERE username = ?");
+$st = $db->prepare("SELECT id, username, password, role, venue_limit, is_verified FROM users WHERE username = ?");
 $st->execute([$username]);
 $user = $st->fetch();
 
@@ -53,6 +53,14 @@ if (!$user || !password_verify($password, $user['password'])) {
 
     $_SESSION['old_input'] = ['username' => $username];
     flash('Nesprávny e-mail alebo heslo.', 'error');
+    header('Location: ' . url('login'));
+    exit;
+}
+
+// ── Email verification check ──────────────────────────────────────
+if (!(int)($user['is_verified'] ?? 0)) {
+    $_SESSION['old_input'] = ['username' => $username];
+    flash('Váš účet nie je aktivovaný. Skontrolujte e-mail s aktivačným odkazom.', 'error');
     header('Location: ' . url('login'));
     exit;
 }

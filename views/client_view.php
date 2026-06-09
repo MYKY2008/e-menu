@@ -14,7 +14,7 @@ $venue = $vSt->fetch();
 if (!$venue) {
     http_response_code(404);
     echo '<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8"><title>Nenájdené</title>'
-       . '<link rel="stylesheet" href="' . url('assets/css/style.css') . '"></head>'
+       . '<link rel="stylesheet" href="' . asset('assets/css/style.css') . '"></head>'
        . '<body class="min-h-screen flex items-center justify-center bg-gray-50">'
        . '<div class="text-center"><p class="text-5xl mb-4">🔍</p>'
        . '<h1 class="text-xl font-bold text-gray-900">Prevádzka neexistuje</h1>'
@@ -147,7 +147,7 @@ $AL = [
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">
+<link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
 <style>
 /* Dynamic accent color for active nav pill (PHP-injected) */
 .cat-pill{transition:all .2s}
@@ -289,18 +289,32 @@ $AL = [
        class="sticky top-0 z-40 flex-shrink-0
               bg-white/90 dark:bg-slate-900/90 backdrop-blur-md
               border-b border-gray-100 dark:border-slate-800">
-    <div class="flex gap-1.5 overflow-x-auto no-scrollbar px-4 py-3">
-      <?php foreach ($categories as $cat): ?>
-      <button onclick="showCategory(<?= (int)$cat['id'] ?>, '<?= e(addslashes($cat['name'])) ?>')"
-              id="pill-<?= (int)$cat['id'] ?>"
-              class="cat-pill flex-none px-3.5 py-1.5 rounded-full
-                     text-xs font-semibold whitespace-nowrap
-                     text-gray-500 dark:text-gray-400
-                     hover:bg-gray-100 dark:hover:bg-slate-800
+    <div class="flex items-center">
+      <div class="flex-1 flex gap-1.5 overflow-x-auto no-scrollbar px-4 py-3">
+        <?php foreach ($categories as $cat): ?>
+        <button onclick="showCategory(<?= (int)$cat['id'] ?>, '<?= e(addslashes($cat['name'])) ?>')"
+                id="pill-<?= (int)$cat['id'] ?>"
+                class="cat-pill flex-none px-3.5 py-1.5 rounded-full
+                       text-xs font-semibold whitespace-nowrap
+                       text-gray-500 dark:text-gray-400
+                       hover:bg-gray-100 dark:hover:bg-slate-800
+                       transition-all duration-200">
+          <?= e($cat['icon']) ?> <?= e($cat['name']) ?>
+        </button>
+        <?php endforeach; ?>
+      </div>
+      <button onclick="openSearch()" aria-label="Hľadať v menu"
+              class="flex-shrink-0 w-9 h-9 mr-3 rounded-full
+                     bg-gray-100 dark:bg-slate-800
+                     flex items-center justify-center
+                     text-gray-500 dark:text-slate-400
+                     hover:bg-gray-200 dark:hover:bg-slate-700
                      transition-all duration-200">
-        <?= e($cat['icon']) ?> <?= e($cat['name']) ?>
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
       </button>
-      <?php endforeach; ?>
     </div>
   </nav>
   <?php endif; ?>
@@ -326,6 +340,35 @@ $AL = [
     <span id="back-cat-name"
           class="text-sm font-bold text-gray-900 dark:text-white truncate"></span>
   </div>
+
+  <!-- ── SEARCH PANEL ─────────────────────────────────────────────── -->
+  <div id="search-panel" class="hidden flex-shrink-0
+         bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 px-4 py-3">
+    <div class="relative flex items-center">
+      <svg class="absolute left-3 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input id="search-input" type="search" placeholder="Hľadať jedlo…"
+             oninput="doSearch()"
+             class="flex-1 pl-9 pr-10 py-2.5
+                    bg-gray-100 dark:bg-slate-800 border-none rounded-2xl
+                    text-sm text-slate-900 dark:text-slate-100
+                    placeholder-gray-400 dark:placeholder-slate-500
+                    focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+      <button onclick="closeSearch()" aria-label="Zavrieť hľadanie"
+              class="absolute right-3 w-5 h-5 rounded-full
+                     bg-gray-300 dark:bg-slate-600 text-gray-600 dark:text-slate-300
+                     flex items-center justify-center text-[10px] font-bold
+                     hover:bg-gray-400 dark:hover:bg-slate-500 transition">
+        ✕
+      </button>
+    </div>
+  </div>
+
+  <!-- ── SEARCH RESULTS ────────────────────────────────────────────── -->
+  <div id="search-results" class="hidden flex-1 overflow-y-auto pb-safe px-4 pt-4 space-y-5"></div>
 
   <!-- ══ HOME VIEW (Odporúčame) ════════════════════════════════════════ -->
   <div id="home-view" class="flex-1 flex flex-col">
@@ -474,8 +517,11 @@ $AL = [
                   $dotBg = $isWhiteCard ? 'rgba(0,0,0,.06)' : ($itc === '#ffffff' ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.09)');
                   $dotTc = $isWhiteCard ? '#9ca3af' : $imt;
                 ?>
-                <span class="w-4 h-4 rounded-full text-[9px] font-bold
-                             flex items-center justify-center leading-none"
+                <span onclick="showAllergenInfo(<?= (int)$aNum ?>,event)"
+                      role="button" tabindex="0"
+                      class="w-4 h-4 rounded-full text-[9px] font-bold cursor-pointer
+                             inline-flex items-center justify-center leading-none
+                             hover:ring-2 hover:ring-offset-1 hover:ring-indigo-400 transition-all"
                       style="background:<?= $dotBg ?>;color:<?= $dotTc ?>">
                   <?= (int)$aNum ?>
                 </span>
@@ -483,14 +529,20 @@ $AL = [
               </div>
               <?php endif; ?>
             </div>
-            <span class="flex-shrink-0 self-start mt-0.5 px-3 py-1 rounded-full
-                         text-sm font-bold leading-snug whitespace-nowrap
-                         <?= $isWhiteCard
-                             ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-gray-100'
-                             : '' ?>"
-                  <?= !$isWhiteCard ? "style=\"background:{$accentHex};color:{$accentText}\"" : '' ?>>
-              <?= $ipr ?> €
-            </span>
+            <div class="flex-shrink-0 flex flex-col items-end gap-1.5 self-start mt-0.5">
+              <?php if (!empty($item['image'])): ?>
+              <div class="w-14 h-14 rounded-xl overflow-hidden border border-gray-100 dark:border-slate-600">
+                <img src="<?= e(imgUrl($item['image'])) ?>" alt="" class="w-full h-full object-cover">
+              </div>
+              <?php endif; ?>
+              <span class="px-3 py-1 rounded-full text-sm font-bold leading-snug whitespace-nowrap
+                           <?= $isWhiteCard
+                               ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-gray-100'
+                               : '' ?>"
+                    <?= !$isWhiteCard ? "style=\"background:{$accentHex};color:{$accentText}\"" : '' ?>>
+                <?= $ipr ?> €
+              </span>
+            </div>
           </div>
         </button>
         <?php endforeach; endif; ?>
@@ -530,6 +582,9 @@ $AL = [
          class="text-2xl font-extrabold mt-2 text-gray-900 dark:text-white"></p>
     </div>
     <div id="sheet-body" class="flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+      <div id="sheet-img-wrap" class="hidden -mx-5 -mt-5 mb-5">
+        <img id="sheet-img" src="" alt="" class="w-full object-cover" style="max-height:200px">
+      </div>
       <p id="sheet-desc"
          class="text-sm text-gray-500 dark:text-slate-400 leading-relaxed hidden"></p>
       <div id="sheet-allergens"
@@ -542,10 +597,33 @@ $AL = [
     <div class="flex-shrink-0 pb-safe bg-white dark:bg-slate-900"></div>
   </article>
 
+  <!-- ── ALLERGEN POPOVER ──────────────────────────────────────────── -->
+  <div id="al-pop" onclick="closeAllergenPop()"
+       class="hidden fixed inset-0 z-[60] flex items-center justify-center p-5 bg-black/40">
+    <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-6 max-w-xs w-full
+                border border-gray-100 dark:border-slate-800" onclick="event.stopPropagation()">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50
+                     text-indigo-600 dark:text-indigo-400 text-sm font-bold
+                     flex items-center justify-center flex-shrink-0" id="al-pop-num"></span>
+        <h3 class="font-bold text-slate-900 dark:text-white text-sm">Alergén</h3>
+      </div>
+      <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed" id="al-pop-text"></p>
+      <button onclick="closeAllergenPop()"
+              class="mt-5 w-full py-2.5 rounded-2xl bg-gray-100 dark:bg-slate-800
+                     text-slate-700 dark:text-slate-300 text-sm font-semibold
+                     hover:bg-gray-200 dark:hover:bg-slate-700 transition">
+        Zatvoriť
+      </button>
+    </div>
+  </div>
+
 </div><!-- /#app -->
 
 <script>
-const AL = <?= json_encode($AL, JSON_UNESCAPED_UNICODE) ?>;
+const AL       = <?= json_encode($AL, JSON_UNESCAPED_UNICODE) ?>;
+const BASE_URL = <?= json_encode(rtrim(baseUrl(), '/')) ?>;
+const MENU_CATS= <?= json_encode($categories, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 // ── SVG icons ─────────────────────────────────────────────────────
 const SVG_SUN = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
@@ -635,6 +713,14 @@ function openSheet(item) {
   const desc = String(item.detail_description || '').trim() || String(item.description || '').trim();
   const dEl = document.getElementById('sheet-desc');
   desc ? (dEl.textContent = desc, dEl.classList.remove('hidden')) : dEl.classList.add('hidden');
+  const imgWrap = document.getElementById('sheet-img-wrap');
+  const imgEl   = document.getElementById('sheet-img');
+  if (item.image && imgWrap && imgEl) {
+    imgEl.src = BASE_URL + '/' + item.image;
+    imgWrap.classList.remove('hidden');
+  } else if (imgWrap) {
+    imgWrap.classList.add('hidden');
+  }
   const nums = String(item.allergens || '').split(',')
     .map(n => parseInt(n.trim(), 10)).filter(n => n >= 1 && n <= 14);
   const algDiv  = document.getElementById('sheet-allergens');
@@ -642,9 +728,11 @@ function openSheet(item) {
   if (nums.length) {
     algList.innerHTML = nums.map(n =>
       `<li class="flex items-start gap-2.5 text-sm text-gray-600 dark:text-slate-400">
-        <span class="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-800
-                     text-gray-500 dark:text-slate-400 text-[10px] font-bold
-                     flex items-center justify-center flex-shrink-0 mt-0.5">${n}</span>
+        <button onclick="showAllergenInfo(${n},event)"
+                class="w-5 h-5 rounded-full bg-gray-100 dark:bg-slate-800
+                       text-gray-500 dark:text-slate-400 text-[10px] font-bold
+                       flex items-center justify-center flex-shrink-0 mt-0.5
+                       hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition">${n}</button>
         <span>${AL[n] || ('Alergén ' + n)}</span>
       </li>`
     ).join('');
@@ -666,7 +754,108 @@ function closeSheet() {
   window.scrollTo(0, _scrollY);
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeSheet(); closeAllergenPop(); closeSearch(); }
+});
+
+// ── Allergen popover ──────────────────────────────────────────────
+function showAllergenInfo(num, event) {
+  event.stopPropagation();
+  document.getElementById('al-pop-num').textContent = num;
+  document.getElementById('al-pop-text').textContent = AL[num] || ('Alergén ' + num);
+  document.getElementById('al-pop').classList.remove('hidden');
+}
+function closeAllergenPop() {
+  document.getElementById('al-pop').classList.add('hidden');
+}
+
+// ── Live search ───────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let _srCache = [];
+
+function openSearch() {
+  document.getElementById('search-panel').classList.remove('hidden');
+  document.getElementById('search-input').focus();
+  document.getElementById('home-view').classList.add('hidden');
+  document.getElementById('cat-views').classList.add('hidden');
+  document.getElementById('back-bar').style.display = 'none';
+  document.getElementById('cat-nav')?.classList.remove('hidden');
+}
+
+function closeSearch() {
+  document.getElementById('search-panel').classList.add('hidden');
+  document.getElementById('search-results').classList.add('hidden');
+  document.getElementById('search-input').value = '';
+  _srCache = [];
+  showHome();
+}
+
+function doSearch() {
+  const q = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+  const resultsEl = document.getElementById('search-results');
+  _srCache = [];
+
+  if (!q) {
+    resultsEl.classList.add('hidden');
+    document.getElementById('home-view').classList.remove('hidden');
+    return;
+  }
+
+  document.getElementById('home-view').classList.add('hidden');
+  document.getElementById('cat-views').classList.add('hidden');
+
+  let html = '';
+  let total = 0;
+
+  for (const cat of (MENU_CATS || [])) {
+    const catMatch = cat.name.toLowerCase().includes(q);
+    const matches = (cat.items || []).filter(item =>
+      catMatch ||
+      item.name.toLowerCase().includes(q) ||
+      (item.description || '').toLowerCase().includes(q)
+    );
+    if (!matches.length) continue;
+    total += matches.length;
+    html += `<div>
+      <p class="text-[10px] font-black uppercase tracking-[.15em] mb-2 text-gray-400 dark:text-slate-500">${escHtml(cat.name)}</p>
+      <div class="space-y-2">`;
+    for (const item of matches) {
+      const idx = _srCache.length;
+      _srCache.push(item);
+      const price = parseFloat(item.price || 0).toFixed(2).replace('.', ',');
+      html += `<button onclick="_openSrItem(${idx})"
+               class="w-full text-left bg-white dark:bg-slate-800 rounded-[2rem] p-4
+                      shadow-sm border border-gray-100 dark:border-slate-700
+                      hover:shadow-md active:scale-[.98] transition-all duration-200">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">${escHtml(item.name)}</p>
+            ${item.description ? `<p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">${escHtml(item.description)}</p>` : ''}
+          </div>
+          <span class="flex-shrink-0 px-3 py-1 rounded-full bg-gray-100 dark:bg-slate-700
+                       text-sm font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">${price} €</span>
+        </div>
+      </button>`;
+    }
+    html += `</div></div>`;
+  }
+
+  if (!total) {
+    html = `<div class="text-center py-16">
+      <p class="text-4xl mb-3">🔍</p>
+      <p class="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1">Nič nenájdené</p>
+      <p class="text-xs text-gray-400 dark:text-slate-500">Skúste iný výraz</p>
+    </div>`;
+  }
+
+  resultsEl.innerHTML = html;
+  resultsEl.classList.remove('hidden');
+}
+
+function _openSrItem(idx) { openSheet(_srCache[idx]); }
 
 // ── Init ──────────────────────────────────────────────────────────
 refreshDarkIcon();

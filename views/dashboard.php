@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">
+<link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
@@ -219,6 +219,45 @@ $EU_ALLERGENS = [
       </div>
     </div>
     <?php endif; ?>
+
+    <?php if ($selected): ?>
+    <a href="<?= url('api/export_csv.php') ?>?slug=<?= e($selected['slug']) ?>"
+       class="flex items-center justify-center gap-2 w-full py-2.5
+              bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800
+              text-slate-600 dark:text-slate-400 text-xs font-semibold
+              rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800
+              transition-all duration-200 active:scale-95">
+      <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2"
+           viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
+           d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      Export menu (CSV)
+    </a>
+    <?php endif; ?>
+
+    <!-- ── Zmena hesla (vždy viditeľné) ──────────────────────── -->
+    <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-4 border border-gray-100 dark:border-slate-800">
+      <h3 class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest mb-3">Zmena hesla</h3>
+      <div class="space-y-2">
+        <input id="cp-old" type="password" placeholder="Aktuálne heslo" autocomplete="current-password"
+          class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+                 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+        <input id="cp-new" type="password" placeholder="Nové heslo (min. 8)" autocomplete="new-password"
+          class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+                 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+        <input id="cp-new2" type="password" placeholder="Zopakovať nové heslo" autocomplete="new-password"
+          class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+                 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+        <button onclick="submitPasswordChange()"
+          class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold
+                 rounded-xl transition-all duration-200 active:scale-95">
+          Zmeniť heslo
+        </button>
+      </div>
+    </div>
+
   </aside>
 
   <!-- ══ CENTER: Tabs ════════════════════════════════════════════════ -->
@@ -729,6 +768,34 @@ $EU_ALLERGENS = [
         </div>
         <input type="hidden" id="mi-color" value="">
       </div>
+
+      <!-- Item image -->
+      <div>
+        <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">
+          Fotka jedla <span class="text-slate-400 font-normal">(voliteľné)</span>
+        </label>
+        <div id="mi-img-preview-wrap" class="hidden mb-2">
+          <img id="mi-img-preview" src="" alt=""
+               class="w-full h-36 object-cover rounded-2xl border border-gray-200 dark:border-slate-700">
+          <button type="button" onclick="clearItemImage()"
+                  class="text-xs text-red-500 hover:underline mt-1.5 block">
+            Odstrániť fotku
+          </button>
+        </div>
+        <label class="cursor-pointer inline-flex items-center gap-2 px-4 py-2
+                      bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
+                      text-slate-700 dark:text-slate-300 text-xs font-semibold
+                      rounded-xl transition-all duration-200">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+            <path d="m21 15-5-5L5 21"/>
+          </svg>
+          Nahrať fotku
+          <input type="file" id="mi-img-file" accept="image/*" class="sr-only">
+        </label>
+        <input type="hidden" id="mi-image" value="">
+      </div>
     </div>
 
     <input type="hidden" id="mi-id" value="">
@@ -881,6 +948,36 @@ function clearCover() {
   updatePreview();
 }
 
+// ── Item image upload ─────────────────────────────────────────────
+document.getElementById('mi-img-file')?.addEventListener('change', function () {
+  const file = this.files[0]; if (!file) return;
+  if (file.size > 1_000_000) toast('Obrázok je príliš veľký, automaticky ho optimalizujeme…', 'info');
+  const img = new Image();
+  const objUrl = URL.createObjectURL(file);
+  img.onload = () => {
+    const MAX_W = 600;
+    let w = img.width, h = img.height;
+    if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(img, 0, 0, w, h);
+    const url = cv.toDataURL('image/jpeg', 0.8);
+    URL.revokeObjectURL(objUrl);
+    document.getElementById('mi-image').value = url;
+    document.getElementById('mi-img-preview').src = url;
+    document.getElementById('mi-img-preview-wrap').classList.remove('hidden');
+  };
+  img.src = objUrl;
+});
+
+function clearItemImage() {
+  document.getElementById('mi-image').value = '';
+  const f = document.getElementById('mi-img-file');
+  if (f) f.value = '';
+  document.getElementById('mi-img-preview').src = '';
+  document.getElementById('mi-img-preview-wrap').classList.add('hidden');
+}
+
 // ── Tab switching ─────────────────────────────────────────────────
 function switchTab(tab) {
   activeTab = tab;
@@ -1023,6 +1120,7 @@ function openItemModal(itemId, catId) {
   document.getElementById('mi-featured').checked = false;
   document.querySelectorAll('.mi-allergen').forEach(cb => cb.checked = false);
   selectItemTheme('');
+  clearItemImage();
 
   if (itemId) {
     let item = null;
@@ -1044,6 +1142,11 @@ function openItemModal(itemId, catId) {
       });
     }
     selectItemTheme(item.bg_color || '');
+    if (item.image) {
+      document.getElementById('mi-image').value = item.image;
+      document.getElementById('mi-img-preview').src = BASE_URL + '/' + item.image;
+      document.getElementById('mi-img-preview-wrap').classList.remove('hidden');
+    }
   }
   openModal('modal-item');
 }
@@ -1067,6 +1170,7 @@ async function saveItemData() {
     is_featured:         document.getElementById('mi-featured').checked ? 1 : 0,
     allergens: [...document.querySelectorAll('.mi-allergen:checked')].map(c=>c.value).join(','),
     bg_color:  document.getElementById('mi-color').value || null,
+    image:     document.getElementById('mi-image').value || null,
   };
   if (id) payload.id = parseInt(id);
   else    payload.category_id = parseInt(catId);
@@ -1533,6 +1637,30 @@ function toast(msg, type = 'info') {
   el.textContent = msg;
   document.getElementById('toast-wrap').appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3200);
+}
+
+// ── Password change ───────────────────────────────────────────────
+async function submitPasswordChange() {
+  const oldPw = document.getElementById('cp-old').value;
+  const newPw = document.getElementById('cp-new').value;
+  const newPw2 = document.getElementById('cp-new2').value;
+  if (!oldPw || !newPw || !newPw2) { toast('Vyplňte všetky polia.', 'error'); return; }
+  try {
+    const res = await fetch(<?= json_encode(url('api/change_password.php')) ?>, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, old_password: oldPw, new_password: newPw, new_password2: newPw2 })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast('Heslo bolo úspešne zmenené.', 'success');
+      document.getElementById('cp-old').value  = '';
+      document.getElementById('cp-new').value  = '';
+      document.getElementById('cp-new2').value = '';
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
 }
 
 // ── Init ──────────────────────────────────────────────────────────

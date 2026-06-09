@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">
+<link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
 <style>*{-webkit-tap-highlight-color:transparent}</style>
 </head>
 <body class="bg-gray-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 transition-colors duration-200">
@@ -23,7 +23,7 @@ $totalUsers  = (int)$db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $totalVenues = (int)$db->query("SELECT COUNT(*) FROM venues")->fetchColumn();
 
 $users = $db->query("
-    SELECT u.id, u.username, u.role, u.venue_limit, u.created_at,
+    SELECT u.id, u.username, u.role, u.venue_limit, u.created_at, u.is_verified,
            COUNT(v.slug) AS venue_count
     FROM users u
     LEFT JOIN venues v ON v.user_id = u.id
@@ -123,6 +123,11 @@ $flash = getFlash();
           <?= count($users) ?>
         </span>
       </h2>
+      <button onclick="openCreateUser()"
+        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold
+               rounded-xl transition-all duration-200 active:scale-95 shadow-sm shadow-indigo-500/20">
+        + Nový účet
+      </button>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
@@ -144,6 +149,12 @@ $flash = getFlash();
               <?= e($u['username']) ?>
               <?php if ($isSelf): ?>
               <span class="ml-1 text-[10px] text-indigo-400 dark:text-indigo-500">(vy)</span>
+              <?php endif; ?>
+              <?php if (!(int)($u['is_verified'] ?? 1)): ?>
+              <span class="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide
+                           bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
+                neoverený
+              </span>
               <?php endif; ?>
             </td>
             <td class="px-6 py-4">
@@ -245,8 +256,69 @@ $flash = getFlash();
         </tbody>
       </table>
     </div>
+    <!-- ── Database backup ────────────────────────────────────────── -->
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm
+              border border-gray-100 dark:border-slate-800 p-6
+              flex items-center justify-between gap-4">
+    <div>
+      <h2 class="font-bold text-slate-900 dark:text-white mb-1">Záloha databázy</h2>
+      <p class="text-sm text-slate-500 dark:text-slate-400">
+        Stiahnuť aktuálny stav databázy ako <code class="text-xs bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">.db</code> súbor.
+      </p>
+    </div>
+    <a href="<?= url('api/backup.php') ?>"
+       class="flex-shrink-0 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white
+              font-semibold text-sm rounded-2xl transition-all duration-200 active:scale-95
+              shadow-lg shadow-indigo-500/20">
+      Stiahnuť zálohu
+    </a>
   </div>
 
+</div>
+
+<!-- ── Create user modal ────────────────────────────────────────── -->
+<div id="cu-modal" class="hidden fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-gray-100 dark:border-slate-800 p-7 w-full max-w-sm">
+    <h3 class="font-bold text-lg text-slate-900 dark:text-white mb-5">Vytvoriť účet</h3>
+    <div class="space-y-3 mb-5">
+      <input id="cu-email" type="email" placeholder="E-mail" autocomplete="off"
+        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl
+               px-4 py-3 text-sm text-slate-900 dark:text-slate-100
+               placeholder-slate-400 dark:placeholder-slate-500
+               focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+      <input id="cu-pass" type="password" placeholder="Heslo (min. 8 znakov)" minlength="8"
+        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl
+               px-4 py-3 text-sm text-slate-900 dark:text-slate-100
+               placeholder-slate-400 dark:placeholder-slate-500
+               focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+      <div class="flex gap-3">
+        <select id="cu-role"
+          class="flex-1 bg-gray-100 dark:bg-slate-800 border-none rounded-xl
+                 px-4 py-3 text-sm text-slate-900 dark:text-slate-100
+                 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+          <option value="user">Používateľ</option>
+          <option value="admin">Admin</option>
+        </select>
+        <input id="cu-limit" type="number" min="0" max="9999" value="1" placeholder="Limit"
+          class="w-24 bg-gray-100 dark:bg-slate-800 border-none rounded-xl
+                 px-4 py-3 text-sm text-slate-900 dark:text-slate-100
+                 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+      </div>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="submitCreateUser()"
+        class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold
+               py-3 rounded-2xl text-sm transition-all duration-200 active:scale-95">
+        Vytvoriť
+      </button>
+      <button onclick="closeCreateUser()"
+        class="px-5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
+               text-slate-700 dark:text-slate-300 font-semibold
+               py-3 rounded-2xl text-sm transition-all duration-200">
+        Zrušiť
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- ── Password reset modal ─────────────────────────────────────── -->
@@ -345,6 +417,62 @@ async function submitReset() {
 document.getElementById('pw-modal').addEventListener('click', function(e) {
   if (e.target === this) closePwModal();
 });
+
+function openCreateUser() {
+  document.getElementById('cu-email').value  = '';
+  document.getElementById('cu-pass').value   = '';
+  document.getElementById('cu-role').value   = 'user';
+  document.getElementById('cu-limit').value  = '1';
+  document.getElementById('cu-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('cu-email').focus(), 50);
+}
+function closeCreateUser() {
+  document.getElementById('cu-modal').classList.add('hidden');
+}
+async function submitCreateUser() {
+  const email = document.getElementById('cu-email').value.trim();
+  const pass  = document.getElementById('cu-pass').value;
+  const role  = document.getElementById('cu-role').value;
+  const limit = parseInt(document.getElementById('cu-limit').value) || 1;
+  if (!email) { toast('Zadajte e-mail.', 'error'); return; }
+  if (pass.length < 8) { toast('Heslo musí mať aspoň 8 znakov.', 'error'); return; }
+  try {
+    const data = await adminApi({ action: 'create_user', username: email, password: pass, role, venue_limit: limit });
+    if (data.ok) {
+      toast('Účet bol vytvorený.', 'success');
+      closeCreateUser();
+      const tbody = document.querySelector('#user-row-' + data.id)?.closest('tbody')
+                 || document.querySelector('tbody');
+      if (tbody) {
+        const tr = document.createElement('tr');
+        tr.id = 'user-row-' + data.id;
+        tr.className = 'hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors';
+        tr.innerHTML = `
+          <td class="px-6 py-4 font-medium text-slate-900 dark:text-slate-100">${escHtml(email)}</td>
+          <td class="px-6 py-4"><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold ${role==='admin'?'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300':'bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}">${escHtml(role)}</span></td>
+          <td class="px-6 py-4 text-slate-500 dark:text-slate-400">0</td>
+          <td class="px-6 py-4"><input type="number" min="0" max="9999" value="${limit}"
+            class="w-20 bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-1.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+            onchange="updateLimit(${data.id}, this.value)"></td>
+          <td class="px-6 py-4 text-slate-400 dark:text-slate-500 text-xs">${new Date().toISOString().slice(0,10)}</td>
+          <td class="px-6 py-4 text-right"><div class="flex justify-end gap-2">
+            <button onclick="resetPassword(${data.id},'${escHtml(email).replace(/'/g,"\\\'")}')"
+              class="px-3 py-1.5 text-xs rounded-xl font-semibold transition-all duration-200 active:scale-95 bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300">Heslo</button>
+            <button onclick="deleteUser(${data.id},'${escHtml(email).replace(/'/g,"\\\'")}')"
+              class="px-3 py-1.5 text-xs rounded-xl font-semibold transition-all duration-200 active:scale-95 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-400">Zmazať</button>
+          </div></td>`;
+        tbody.prepend(tr);
+      }
+    } else toast(data.error || 'Chyba.', 'error');
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+document.getElementById('cu-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeCreateUser();
+});
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 function toast(msg, type = 'info') {
   const el = document.createElement('div');

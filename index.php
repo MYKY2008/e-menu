@@ -94,6 +94,10 @@ switch (true) {
         require BASE_DIR . '/views/reset_password.php';
         break;
 
+    case $path === '/verify':
+        require BASE_DIR . '/auth/verify.php';
+        break;
+
     case $path === '/logout':
         require BASE_DIR . '/auth/logout.php';
         break;

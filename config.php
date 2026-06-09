@@ -10,6 +10,23 @@ ini_set('display_errors',         '0');
 ini_set('display_startup_errors', '0');
 error_reporting(E_ALL);
 
+// ── .env loader ───────────────────────────────────────────────
+(static function (): void {
+    $file = __DIR__ . DIRECTORY_SEPARATOR . '.env';
+    if (!is_file($file)) return;
+    foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+        [$key, $val] = explode('=', $line, 2);
+        $key = trim($key);
+        $val = trim($val, " \t\n\r\0\x0B\"'");
+        if ($key !== '' && !array_key_exists($key, $_ENV)) {
+            $_ENV[$key] = $val;
+            putenv("$key=$val");
+        }
+    }
+})();
+
 // ── Session ───────────────────────────────────────────────────
 if (session_status() === PHP_SESSION_NONE) {
     session_start([
@@ -26,6 +43,7 @@ define('DB_FILE',         __DIR__ . DIRECTORY_SEPARATOR . 'gastrolink.db');
 define('SLUG_PATTERN',    '/^[a-z0-9][a-z0-9_-]{1,49}$/');
 define('MAX_LOGO_BYTES',  700_000);   // ~512 KB base64
 define('MAX_COVER_BYTES', 1_500_000); // ~1 MB base64
+define('MAX_ITEM_BYTES',  1_000_000); // ~700 KB base64
 define('ALLOWED_COLORS',  ['green', 'burgundy', 'coffee', 'black', 'orange']);
 define('UPLOADS_DIR',     BASE_DIR . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'venues');
 
@@ -46,12 +64,14 @@ function getDB(): PDO {
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS users (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            username    TEXT    UNIQUE NOT NULL,
-            password    TEXT    NOT NULL,
-            role        TEXT    NOT NULL DEFAULT 'user',
-            venue_limit INTEGER NOT NULL DEFAULT 1,
-            created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            username     TEXT    UNIQUE NOT NULL,
+            password     TEXT    NOT NULL,
+            role         TEXT    NOT NULL DEFAULT 'user',
+            venue_limit  INTEGER NOT NULL DEFAULT 1,
+            is_verified  INTEGER NOT NULL DEFAULT 0,
+            verify_token TEXT    DEFAULT NULL,
+            created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         )
     ");
     $pdo->exec("
@@ -65,6 +85,7 @@ function getDB(): PDO {
             instagram_url TEXT,
             color         TEXT    NOT NULL DEFAULT 'black',
             logo          TEXT,
+            cover_image   TEXT    DEFAULT NULL,
             created_at    TEXT    NOT NULL
                             DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
             updated_at    TEXT    NOT NULL
@@ -78,6 +99,10 @@ function getDB(): PDO {
         "ALTER TABLE venues ADD COLUMN user_id      INTEGER DEFAULT 1",
         "ALTER TABLE venues ADD COLUMN updated_at   TEXT    DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
         "ALTER TABLE venue_settings ADD COLUMN dark_mode_default INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE items ADD COLUMN image TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN is_verified  INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN verify_token TEXT    DEFAULT NULL",
+        "UPDATE users SET is_verified = 1 WHERE is_verified = 0",
     ];
     foreach ($migrations as $sql) {
         try { $pdo->exec($sql); } catch (PDOException $ignored) {}
@@ -86,7 +111,7 @@ function getDB(): PDO {
     // ── Menu tables ───────────────────────────────────────────
     $pdo->exec("CREATE TABLE IF NOT EXISTS categories (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        venue_slug TEXT    NOT NULL REFERENCES venues(slug) ON DELETE CASCADE,
+        venue_slug TEXT    NOT NULL REFERENCES venues(slug) ON DELETE CASCADE ON UPDATE CASCADE,
         name       TEXT    NOT NULL,
         icon       TEXT    NOT NULL DEFAULT '',
         bg_color   TEXT    DEFAULT NULL,
@@ -108,7 +133,7 @@ function getDB(): PDO {
     )");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS venue_settings (
-        venue_slug             TEXT    PRIMARY KEY REFERENCES venues(slug) ON DELETE CASCADE,
+        venue_slug             TEXT    PRIMARY KEY REFERENCES venues(slug) ON DELETE CASCADE ON UPDATE CASCADE,
         show_allergens         INTEGER NOT NULL DEFAULT 1,
         show_featured          INTEGER NOT NULL DEFAULT 1,
         default_category_color TEXT    NOT NULL DEFAULT '#1E3A5F',
@@ -118,7 +143,7 @@ function getDB(): PDO {
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS scans (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        venue_slug TEXT    NOT NULL REFERENCES venues(slug) ON DELETE CASCADE,
+        venue_slug TEXT    NOT NULL REFERENCES venues(slug) ON DELETE CASCADE ON UPDATE CASCADE,
         user_agent TEXT    NOT NULL DEFAULT '',
         created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
     )");
@@ -193,6 +218,7 @@ function url(string $path = ''): string {
 }
 
 function baseUrl(): string {
+    if (!empty($_ENV['APP_URL'])) return rtrim($_ENV['APP_URL'], '/');
     $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
              || (($_SERVER['SERVER_PORT'] ?? 80) == 443);
     $host  = $_SERVER['HTTP_HOST'] ?? 'localhost';
@@ -205,6 +231,12 @@ function baseUrl(): string {
         : '',
         '/'
     );
+}
+
+function asset(string $path): string {
+    $abs = BASE_DIR . DIRECTORY_SEPARATOR . ltrim(str_replace('/', DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
+    $ver = is_file($abs) ? (string)filemtime($abs) : '0';
+    return url($path) . '?v=' . $ver;
 }
 
 // ── Slug & validation ─────────────────────────────────────────
@@ -382,17 +414,17 @@ function sendEmail(string $to, string $subject, string $htmlBody): bool {
 
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
-        // ── SMTP settings — change these for production ──────
+        // ── SMTP — configure via .env or PHP constants ───────
         $mail->isSMTP();
-        $mail->Host       = defined('SMTP_HOST')     ? SMTP_HOST     : 'localhost';
-        $mail->Port       = defined('SMTP_PORT')     ? SMTP_PORT     : 25;
-        $mail->SMTPAuth   = defined('SMTP_USER')     ? true          : false;
-        $mail->Username   = defined('SMTP_USER')     ? SMTP_USER     : '';
-        $mail->Password   = defined('SMTP_PASS')     ? SMTP_PASS     : '';
-        $mail->SMTPSecure = defined('SMTP_SECURE')   ? SMTP_SECURE   : '';
+        $mail->Host       = $_ENV['SMTP_HOST']     ?? (defined('SMTP_HOST')     ? SMTP_HOST     : 'localhost');
+        $mail->Port       = (int)($_ENV['SMTP_PORT']   ?? (defined('SMTP_PORT')     ? SMTP_PORT     : 25));
+        $mail->Username   = $_ENV['SMTP_USER']     ?? (defined('SMTP_USER')     ? SMTP_USER     : '');
+        $mail->Password   = $_ENV['SMTP_PASS']     ?? (defined('SMTP_PASS')     ? SMTP_PASS     : '');
+        $mail->SMTPSecure = $_ENV['SMTP_SECURE']   ?? (defined('SMTP_SECURE')   ? SMTP_SECURE   : '');
+        $mail->SMTPAuth   = $mail->Username !== '';
 
-        $fromEmail = defined('MAIL_FROM')      ? MAIL_FROM      : 'noreply@gastrolink.sk';
-        $fromName  = defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'GastroLink QR';
+        $fromEmail = $_ENV['MAIL_FROM']      ?? (defined('MAIL_FROM')      ? MAIL_FROM      : 'noreply@gastrolink.sk');
+        $fromName  = $_ENV['MAIL_FROM_NAME'] ?? (defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'GastroLink QR');
 
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($to);
@@ -407,4 +439,13 @@ function sendEmail(string $to, string $subject, string $htmlBody): bool {
         error_log('sendEmail error: ' . $e->getMessage());
         return false;
     }
+}
+
+// ── Garbage collector (1 % lottery) ──────────────────────────
+if (mt_rand(1, 100) === 1) {
+    try {
+        $gcDb = getDB();
+        $gcDb->prepare("DELETE FROM password_resets WHERE expires_at < ?")->execute([time()]);
+        $gcDb->prepare("DELETE FROM login_attempts  WHERE timestamp  < ?")->execute([time() - 86400]);
+    } catch (\Throwable $ignored) {}
 }

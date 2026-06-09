@@ -6,6 +6,21 @@
 <title>GastroLink QR — Digitálny jedálny lístok pre váš podnik</title>
 <meta name="description" content="Vytvorte krásny digitálny jedálny lístok s QR kódom za 2 minúty. Menu, Google recenzie, Instagram — na jednom mieste.">
 
+<!-- Open Graph -->
+<meta property="og:type"        content="website">
+<meta property="og:url"         content="<?= e(baseUrl()) ?>">
+<meta property="og:title"       content="GastroLink QR — Digitálny jedálny lístok pre váš podnik">
+<meta property="og:description" content="Vytvorte krásny digitálny jedálny lístok s QR kódom za 2 minúty. Menu, Google recenzie, Instagram — na jednom mieste.">
+<meta property="og:image"       content="<?= e(baseUrl()) ?>/assets/img/og-image.jpg">
+<meta property="og:locale"      content="sk_SK">
+<meta property="og:site_name"   content="GastroLink QR">
+
+<!-- Twitter Card -->
+<meta name="twitter:card"        content="summary_large_image">
+<meta name="twitter:title"       content="GastroLink QR — Digitálny jedálny lístok pre váš podnik">
+<meta name="twitter:description" content="Vytvorte krásny digitálny jedálny lístok s QR kódom za 2 minúty. Menu, Google recenzie, Instagram — na jednom mieste.">
+<meta name="twitter:image"       content="<?= e(baseUrl()) ?>/assets/img/og-image.jpg">
+
 <!-- Anti-flash dark mode -->
 <script>(function(){if(localStorage.getItem('gl-dark')==='1')document.documentElement.classList.add('dark')})();</script>
 
@@ -14,7 +29,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="<?= url('assets/css/style.css') ?>">
+<link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
 </head>
 <body class="bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 antialiased">
 
