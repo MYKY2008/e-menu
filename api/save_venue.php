@@ -166,23 +166,38 @@ try {
 
     // ── Perform DB write ──────────────────────────────────────
     if (!$isNew && $originalSlug !== $slug) {
-        // Slug rename: verify ownership, then UPDATE PK
+        // Slug rename: verify ownership, then UPDATE PK + all FK references
         $ownCheck = $db->prepare("SELECT user_id FROM venues WHERE slug = ?");
         $ownCheck->execute([$originalSlug]);
         $orig = $ownCheck->fetch();
         if (!$orig || ((int)$orig['user_id'] !== $userId && $role !== 'admin')) {
             throw new RuntimeException('Prevádzka nebola nájdená.');
         }
-        $db->prepare("UPDATE venues
-            SET slug=:slug, name=:name, menu_url=:menu, google_url=:goog,
-                instagram_url=:insta, color=:color, logo=:logo, cover_image=:cover,
-                updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
-            WHERE slug=:orig")
-           ->execute([
-               ':slug'=>$slug, ':name'=>$name, ':menu'=>$menu,
-               ':goog'=>$goog, ':insta'=>$insta, ':color'=>$color,
-               ':logo'=>$logo, ':cover'=>$cover, ':orig'=>$originalSlug,
-           ]);
+        // PRAGMA foreign_keys cannot be changed inside a transaction — must go before beginTransaction
+        $db->exec('PRAGMA foreign_keys = OFF');
+        $db->beginTransaction();
+        try {
+            $db->prepare("UPDATE venues
+                SET slug=:slug, name=:name, menu_url=:menu, google_url=:goog,
+                    instagram_url=:insta, color=:color, logo=:logo, cover_image=:cover,
+                    updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+                WHERE slug=:orig")
+               ->execute([
+                   ':slug'=>$slug, ':name'=>$name, ':menu'=>$menu,
+                   ':goog'=>$goog, ':insta'=>$insta, ':color'=>$color,
+                   ':logo'=>$logo, ':cover'=>$cover, ':orig'=>$originalSlug,
+               ]);
+            foreach (['categories', 'venue_settings', 'scans'] as $tbl) {
+                $db->prepare("UPDATE $tbl SET venue_slug = :new WHERE venue_slug = :old")
+                   ->execute([':new' => $slug, ':old' => $originalSlug]);
+            }
+            $db->commit();
+        } catch (Throwable $ex) {
+            $db->rollBack();
+            throw $ex;
+        } finally {
+            $db->exec('PRAGMA foreign_keys = ON');
+        }
     } else {
         // Upsert (insert new or update same-slug)
         $ownerId = $isNew ? $userId : (int)($existing['user_id'] ?? $userId);

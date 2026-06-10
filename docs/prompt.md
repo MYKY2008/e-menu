@@ -1,23 +1,40 @@
-# PROMPT: Finálne doladenie zobrazenia popisov (Bottom Sheet)
+# PROMPT: Finálne doladenie (Bezpečnosť, Údržba a Mobile UX)
 
-**CIEĽ:** Upraviť modálne okno detailu jedla (Bottom Sheet) v klientskom menu tak, aby vedelo naraz zobraziť krátky aj detailný popis.
+**CIEĽ:** Zabezpečiť systém proti spamu, optimalizovať úložisko a dotiahnuť vizuálne detaily pre mobilné prehliadače.
 
 ---
 
-### 🛠️ ÚLOHA: Úprava HTML a JS v Client View
-
-**Kde:** `views/client_view.php`
-
+### 🛠️ ÚLOHA 1: Rate Limiting (Ochrana proti spamu)
+**Problém:** Registrácia a reset hesla sú momentálne bez ochrany.
 **Inštrukcie:**
-1.  **Úprava HTML štruktúry Bottom Sheetu:**
-    *   V sekcii `<article id="sheet"...>` pridaj pod nadpis jedla (alebo pod cenu) nový element pre **krátky popis** (napr. `<p id="sheet-short-desc" class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"></p>`).
-    *   Pôvodný element `<p id="sheet-desc">` ponechaj pre **detailný popis** (napr. s menším fontom alebo kurzívou, aby bol vizuálne odlíšený).
-2.  **Úprava JavaScript funkcie `openSheet(item)`:**
-    *   Zmeň doterajšiu logiku, ktorá vyberala *buď* `detail_description` *alebo* `description`.
-    *   **Nová logika:**
-        *   Ak existuje `item.description`, vlož ho do `sheet-short-desc` a zobraz tento element (inak ho skry).
-        *   Ak existuje `item.detail_description`, vlož ho do `sheet-desc` a zobraz tento element (inak ho skry).
-3.  **Dizajn:** Obe textové polia musia ladiť s celkovým dizajnom (správne medzery, farby textu pre Dark Mode).
+1. Uprav `auth/register.php` a `auth/forgot_password_process.php`.
+2. Implementuj kontrolu pokusov z danej IP adresy pomocou existujúcej tabuľky `login_attempts` (podobne ako v `auth/login.php`).
+3. **Limit:** Max 3 registrácie / 3 resety hesla za 15 minút z jednej IP.
 
 ---
-**VÝSTUP:** Dodaj upravený HTML kód sekcie `#sheet` a upravenú JS funkciu `openSheet(item)` zo súboru `views/client_view.php`.
+
+### 🛠️ ÚLOHA 2: Image Cleanup (Úspora miesta)
+**Problém:** Pri zmene alebo zmazaní jedla/loga ostávajú staré súbory na disku.
+**Inštrukcie:**
+1. V `api/manage_menu.php` zabezpeč, aby sa pri akcii `delete_item` fyzicky zmazal obrázok z priečinka `uploads/venues/` (použi funkciu `deleteImageFile` z `config.php`).
+2. Pri akcii `save_item`, ak sa nahráva nová fotka a položka už mala starú fotku, starý súbor musí byť zmazaný.
+3. Prever rovnakú logiku v `api/save_venue.php` pre logá a cover fotky.
+
+---
+
+### 🛠️ ÚLOHA 3: Mobile UX & SEO Polish
+**Inštrukcie:**
+1. **Theme Color:** Uprav `views/partials/header.php`, aby prijímal voliteľnú premennú `$themeColor`. Ak existuje, pridaj `<meta name="theme-color" content="...">`.
+2. V `views/client_view.php` nastav túto premennú na primárnu farbu prevádzky. Týmto sa lišta mobilného prehliadača (Chrome/Safari) zafarbí podľa farby podniku.
+3. **App Title:** Zabezpeč, aby v `header.php` bol názov stránky vždy v tvare `Názov | GastroLink QR`.
+
+---
+
+### 🛠️ ÚLOHA 4: Error Logging
+**Inštrukcie:**
+1. V `config.php` vytvor jednoduchú funkciu `gl_log($message)`.
+2. Funkcia zapíše chybu s časovou pečiatkou do súboru (napr. `storage/error.log`). Zabezpeč, aby priečinok `storage` existoval a súbor nebol prístupný z webu (cez `.htaccess` alebo umiestnením).
+3. Nahraď v kritických `catch` blokoch v API (najmä v `PHPMailer`) priame `error_log` touto novou funkciou.
+
+---
+**VÝSTUP:** Dodaj upravené súbory: `config.php`, `auth/register.php`, `auth/forgot_password_process.php`, `api/manage_menu.php`, `api/save_venue.php` a `views/partials/header.php`.

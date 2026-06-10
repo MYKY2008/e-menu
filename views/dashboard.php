@@ -1,25 +1,11 @@
-<!DOCTYPE html>
-<html lang="sk" class="">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex, nofollow">
-<title>Dashboard — GastroLink QR</title>
-<!-- Anti-flash dark mode -->
-<script>(function(){if(localStorage.getItem('gl-dark')==='1')document.documentElement.classList.add('dark')})();</script>
-<!-- Inter font -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<?php
+$title     = 'Dashboard — GastroLink QR';
+$robots    = 'noindex, nofollow';
+$extraHead = '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-<style>
-*{-webkit-tap-highlight-color:transparent}
-.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
-.no-scrollbar::-webkit-scrollbar{display:none}
-</style>
-</head>
+<style>*{-webkit-tap-highlight-color:transparent}.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}.no-scrollbar::-webkit-scrollbar{display:none}</style>';
+require __DIR__ . '/partials/header.php';
+?>
 <body class="bg-gray-50 dark:bg-slate-950 min-h-screen transition-colors duration-200">
 
 <?php
@@ -416,7 +402,7 @@ $EU_ALLERGENS = [
 
         <!-- Actions -->
         <div class="flex gap-2 pt-1">
-          <button type="button" onclick="saveVenue()"
+          <button id="btn-save-venue" type="button" onclick="saveVenue()"
                   class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white
                          font-bold py-2.5 rounded-xl text-sm transition">
             Uložiť nastavenia
@@ -816,6 +802,28 @@ $EU_ALLERGENS = [
   </div>
 </div>
 
+<!-- ══ MODAL: Confirm Slug Change ════════════════════════════════════ -->
+<div id="modal-confirm-slug"
+     class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-6 w-full max-w-sm border border-gray-100 dark:border-slate-800">
+    <h3 class="font-bold text-lg mb-3 text-slate-900 dark:text-white">⚠️ Zmena URL adresy</h3>
+    <p class="text-sm text-slate-600 dark:text-slate-400 mb-5">Pozor: Zmena adresy znefunkční všetky vytlačené QR kódy. Budete musieť vytlačiť nové.</p>
+    <div class="flex gap-2">
+      <button id="modal-confirm-slug-ok"
+              class="flex-1 bg-red-600 hover:bg-red-700 text-white
+                     font-bold py-2.5 rounded-xl text-sm transition">
+        Potvrdiť zmenu
+      </button>
+      <button id="modal-confirm-slug-cancel"
+              class="px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
+                     text-slate-700 dark:text-slate-300
+                     font-bold py-2.5 rounded-xl text-sm transition">
+        Zrušiť
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Constants & state ─────────────────────────────────────────────
 const CSRF    = <?= json_encode(csrfToken()) ?>;
@@ -1046,7 +1054,7 @@ function selectEmoji(emoji) {
 function openModal(id)  { document.getElementById(id)?.classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
 
-['modal-cat', 'modal-item'].forEach(id => {
+['modal-cat', 'modal-item', 'modal-confirm-slug'].forEach(id => {
   document.getElementById(id)?.addEventListener('click', e => {
     if (e.target === document.getElementById(id)) closeModal(id);
   });
@@ -1235,12 +1243,35 @@ function applyMenuData(data) {
 }
 
 // ── Venue AJAX ────────────────────────────────────────────────────
+function confirmSlugModal() {
+  return new Promise(resolve => {
+    openModal('modal-confirm-slug');
+    const ok  = document.getElementById('modal-confirm-slug-ok');
+    const can = document.getElementById('modal-confirm-slug-cancel');
+    const done = (val) => {
+      closeModal('modal-confirm-slug');
+      ok.onclick = null;
+      can.onclick = null;
+      resolve(val);
+    };
+    ok.onclick  = () => done(true);
+    can.onclick = () => done(false);
+  });
+}
+
 async function saveVenue() {
+  const originalSlug = document.getElementById('f-original-slug').value;
+  const newSlug      = document.getElementById('f-slug').value.trim();
+  if (originalSlug && originalSlug !== newSlug) {
+    if (!await confirmSlugModal()) return;
+  }
+  const btn = document.getElementById('btn-save-venue');
+  if (btn) { btn.textContent = 'Ukladám...'; btn.classList.add('opacity-70', 'pointer-events-none'); }
   const payload = {
     csrf:          CSRF,
     action:        'save',
-    original_slug: document.getElementById('f-original-slug').value,
-    slug:          document.getElementById('f-slug').value.trim(),
+    original_slug: originalSlug,
+    slug:          newSlug,
     name:          document.getElementById('f-name').value.trim(),
     google_url:    document.getElementById('f-google').value.trim(),
     instagram_url: document.getElementById('f-insta').value.trim(),
@@ -1261,9 +1292,11 @@ async function saveVenue() {
       }, 700);
     } else {
       toast(data.error || 'Chyba.', 'error');
+      if (btn) { btn.textContent = 'Uložiť nastavenia'; btn.classList.remove('opacity-70', 'pointer-events-none'); }
     }
   } catch (e) {
     toast('Sieťová chyba: ' + e.message, 'error');
+    if (btn) { btn.textContent = 'Uložiť nastavenia'; btn.classList.remove('opacity-70', 'pointer-events-none'); }
   }
 }
 
@@ -1667,18 +1700,5 @@ async function submitPasswordChange() {
 updatePreview();
 if (menuData.categories.length) renderMenuTree();
 
-// ── Dark mode ─────────────────────────────────────────────────────
-const SVG_SUN  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
-const SVG_MOON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-function toggleDark() {
-  const on = document.documentElement.classList.toggle('dark');
-  localStorage.setItem('gl-dark', on ? '1' : '0');
-  document.getElementById('dark-icon').innerHTML = on ? SVG_MOON : SVG_SUN;
-}
-(function() {
-  const on = document.documentElement.classList.contains('dark');
-  document.getElementById('dark-icon').innerHTML = on ? SVG_MOON : SVG_SUN;
-})();
 </script>
-</body>
-</html>
+<?php require __DIR__ . '/partials/footer.php'; ?>

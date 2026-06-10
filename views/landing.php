@@ -1,11 +1,6 @@
-<!DOCTYPE html>
-<html lang="sk" class="">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GastroLink QR — Digitálny jedálny lístok pre váš podnik</title>
+<?php
+ob_start(); ?>
 <meta name="description" content="Vytvorte krásny digitálny jedálny lístok s QR kódom za 2 minúty. Menu, Google recenzie, Instagram — na jednom mieste.">
-
 <!-- Open Graph -->
 <meta property="og:type"        content="website">
 <meta property="og:url"         content="<?= e(baseUrl()) ?>">
@@ -14,23 +9,16 @@
 <meta property="og:image"       content="<?= e(baseUrl()) ?>/assets/img/og-image.jpg">
 <meta property="og:locale"      content="sk_SK">
 <meta property="og:site_name"   content="GastroLink QR">
-
 <!-- Twitter Card -->
 <meta name="twitter:card"        content="summary_large_image">
 <meta name="twitter:title"       content="GastroLink QR — Digitálny jedálny lístok pre váš podnik">
 <meta name="twitter:description" content="Vytvorte krásny digitálny jedálny lístok s QR kódom za 2 minúty. Menu, Google recenzie, Instagram — na jednom mieste.">
 <meta name="twitter:image"       content="<?= e(baseUrl()) ?>/assets/img/og-image.jpg">
-
-<!-- Anti-flash dark mode -->
-<script>(function(){if(localStorage.getItem('gl-dark')==='1')document.documentElement.classList.add('dark')})();</script>
-
-<!-- Inter font -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-
-<link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
-</head>
+<?php
+$extraHead = ob_get_clean();
+$title = 'GastroLink QR — Digitálny jedálny lístok pre váš podnik';
+require __DIR__ . '/partials/header.php';
+?>
 <body class="bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 antialiased">
 
 <!-- ── NAVBAR ──────────────────────────────────────────────────────── -->
@@ -295,20 +283,4 @@
   </div>
 </footer>
 
-<!-- Dark mode script -->
-<script>
-const SVG_SUN = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
-const SVG_MOON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-
-function toggleDark() {
-  const on = document.documentElement.classList.toggle('dark');
-  localStorage.setItem('gl-dark', on ? '1' : '0');
-  document.getElementById('dark-icon').innerHTML = on ? SVG_MOON : SVG_SUN;
-}
-(function(){
-  const on = document.documentElement.classList.contains('dark');
-  document.getElementById('dark-icon').innerHTML = on ? SVG_MOON : SVG_SUN;
-})();
-</script>
-</body>
-</html>
+<?php require __DIR__ . '/partials/footer.php'; ?>

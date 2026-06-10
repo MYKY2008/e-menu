@@ -1,18 +1,4 @@
-<!DOCTYPE html>
-<html lang="sk" class="">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>404 — Stránka nenájdená · GastroLink QR</title>
-
-<script>(function(){if(localStorage.getItem('gl-dark')==='1')document.documentElement.classList.add('dark')})();</script>
-
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-<link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
-</head>
+<?php $title = '404 — Stránka nenájdená · GastroLink QR'; require __DIR__ . '/partials/header.php'; ?>
 <body class="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col items-center justify-center p-5 transition-colors duration-200">
 
 <div class="w-full max-w-sm text-center">
@@ -39,5 +25,4 @@
 
 </div>
 
-</body>
-</html>
+<?php require __DIR__ . '/partials/footer.php'; ?>
