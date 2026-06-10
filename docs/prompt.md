@@ -1,42 +1,32 @@
-# PROMPT: Posledné kroky k ostrej produkcii (Final Polish)
+# PROMPT: Absolútna dokonalosť (Security & UX Polish)
 
-**CIEĽ:** Zabezpečiť maximálnu stabilitu databázy pri záťaži a zjednotiť bezpečnostné mechanizmy.
+**CIEĽ:** Zvýšiť úroveň súkromia pri registrácii a zabezpečiť "blbuvzdornosť" pri zadávaní cien v slovenskom formáte.
 
 ---
 
-### 🛠️ ÚLOHA 1: SQLite Busy Timeout
-**Súbor:** `config.php` (funkcia `getDB`)
+### 🛠️ ÚLOHA 1: Prevencia enumerácie e-mailov
+**Súbor:** `auth/register.php`
 **Inštrukcie:**
-1. V bloku, kde sa nastavujú `PRAGMA` príkazy pre PDO (WAL, synchronous, foreign_keys...), pridaj riadok:
-   `$pdo->exec('PRAGMA busy_timeout = 5000');`
-   *Tento krok je kritický pre produkciu, aby systém nepadal pri súbežnom zápise (napr. počas sťahovania zálohy).*
+1. Uprav časť, kde sa kontroluje, či e-mail už existuje.
+2. Namiesto chyby "Tento e-mail je už zaregistrovaný" nastav správu, ktorá neprezradí, či účet existuje alebo nie.
+3. **Navrhovaný text:** "Ak je tento e-mail voľný, bol naň odoslaný aktivačný odkaz. Skontrolujte si schránku." (Uisti sa, že sa používateľ aj tak presmeruje na login, aby to vyzeralo ako úspech).
 
 ---
 
-### 🛠️ ÚLOHA 2: Konzistentná Session Ochrana
-**Súbor:** `auth/verify.php`
+### 🛠️ ÚLOHA 2: Podpora čiarky v cene (Slovak UX)
+**Súbor:** `api/manage_menu.php`
 **Inštrukcie:**
-1. V časti, kde sa po úspešnej aktivácii nastavujú session premenné (`user_id`, `username`, `user_role`, `venue_limit`), pridaj chýbajúci IP Guard:
-   `$_SESSION['login_ip'] = (string)($_SERVER['REMOTE_ADDR'] ?? '');`
-   *Zabezpečíme tým, že ochrana proti ukradnutiu session (Hijacking) bude fungovať okamžite po aktivácii účtu.*
+1. V akcii `save_item` nájdi riadok, kde sa spracováva `$price`.
+2. Predtým, ako cena prejde cez `filter_var` alebo `floatval`, pridaj náhradu čiarky za bodku:
+   `$rawPrice = str_replace(',', '.', (string)($payload['price'] ?? ''));`
+3. Týmto umožníme používateľom zadávať ceny prirodzene (napr. "4,50" aj "4.50").
 
 ---
 
-### 🛠️ ÚLOHA 3: Mobile Viewport & CSS Polish
-**Súbor:** `views/partials/header.php`
+### 🛠️ ÚLOHA 3: Finálna kontrola `.env.example`
+**Súbor:** `.env.example`
 **Inštrukcie:**
-1. Uprav meta tag `viewport`. Pridaj do neho `viewport-fit=cover`. Celý tag by mal vyzerať takto:
-   `<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">`
-   *Toto zabezpečí správne zobrazenie na moderných iPhonoch s výrezom (notch).*
-2. Skontroluj, či sú importy fontov (Inter) a CSS štýlov v tomto súbore čisté a bez duplicít.
+1. Skontroluj, či `.env.example` obsahuje všetky potrebné premenné, ktoré sme pridali (SMTP nastavenia, MAIL_FROM atď.), aby bol projekt ľahko nasaditeľný pre iných.
 
 ---
-
-### 🛠️ ÚLOHA 4: Čistenie logov pri zálohovaní
-**Súbor:** `api/backup.php`
-**Inštrukcie:**
-1. Pridaj do `catch` bloku v zálohovaní volanie `gl_log()`, ak by proces zlyhal.
-2. Uisti sa, že dočasný súbor `.db` sa v každom prípade zmaže cez `finally`.
-
----
-**VÝSTUP:** Upravené súbory `config.php`, `auth/verify.php`, `views/partials/header.php` a `api/backup.php`.
+**VÝSTUP:** Upravené súbory `auth/register.php`, `api/manage_menu.php` a `.env.example`.

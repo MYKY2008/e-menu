@@ -54,13 +54,12 @@ if ((int)$stCount->fetchColumn() >= 3) {
 }
 $db->prepare("INSERT INTO login_attempts (ip_address, timestamp) VALUES (?, ?)")->execute([$ip, $now]);
 
-// Check uniqueness
+// Check uniqueness — do NOT reveal whether the address is already registered
 $st = $db->prepare("SELECT id FROM users WHERE username = ?");
 $st->execute([$username]);
 if ($st->fetch()) {
-    $_SESSION['old_input'] = ['username' => $username];
-    flash('Tento e-mail je už zaregistrovaný.', 'error');
-    header('Location: ' . url('register'));
+    flash('Ak je tento e-mail voľný, bol naň odoslaný aktivačný odkaz. Skontrolujte si schránku.', 'success');
+    header('Location: ' . url('login'));
     exit;
 }
 

@@ -202,9 +202,10 @@ try {
             if (mb_strlen($desc) > 255) throw new InvalidArgumentException('Krátky popis je príliš dlhý (max 255 znakov).');
             if (mb_strlen($detail) > 1000) throw new InvalidArgumentException('Detailný popis je príliš dlhý (max 1000 znakov).');
 
-            $price = filter_var($payload['price'] ?? '', FILTER_VALIDATE_FLOAT);
+            $rawPrice = str_replace(',', '.', (string)($payload['price'] ?? ''));
+            $price    = filter_var($rawPrice, FILTER_VALIDATE_FLOAT);
             if ($price === false || $price < 0) {
-                throw new InvalidArgumentException('Cena musí byť kladné číslo (napr. 4.50).');
+                throw new InvalidArgumentException('Cena musí byť kladné číslo (napr. 4.50 alebo 4,50).');
             }
 
             // Sanitize allergens — only integers 1–14 separated by commas
