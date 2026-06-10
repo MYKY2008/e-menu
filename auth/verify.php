@@ -31,6 +31,7 @@ $_SESSION['user_id']     = (int)$user['id'];
 $_SESSION['username']    = $user['username'];
 $_SESSION['user_role']   = $user['role'];
 $_SESSION['venue_limit'] = (int)$user['venue_limit'];
+$_SESSION['login_ip']    = (string)($_SERVER['REMOTE_ADDR'] ?? '');
 
 flash('Účet bol úspešne aktivovaný. Vitajte!', 'success');
 $target = ($user['role'] === 'admin') ? url('admin') : url('dashboard');

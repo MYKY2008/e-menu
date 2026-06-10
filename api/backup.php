@@ -28,6 +28,10 @@ try {
     header('Pragma: no-cache');
 
     readfile($tmpFile);
+} catch (Throwable $e) {
+    gl_log('backup.php error: ' . $e->getMessage());
+    http_response_code(500);
+    echo 'Zálohovanie zlyhalo.';
 } finally {
     if (file_exists($tmpFile)) {
         @unlink($tmpFile);
