@@ -29,6 +29,14 @@ try {
     $role   = (string)($_SESSION['user_role'] ?? 'user');
     $action = (string)($payload['action'] ?? '');
 
+    // Load user plan for limit enforcement (admins bypass all limits)
+    $userPlan = 'free';
+    if ($role !== 'admin') {
+        $planSt = $db->prepare("SELECT plan FROM users WHERE id = ?");
+        $planSt->execute([$userId]);
+        $userPlan = (string)($planSt->fetchColumn() ?: 'free');
+    }
+
     // ── Ownership helpers ─────────────────────────────────────
     $verifyVenue = function(string $slug) use ($db, $userId, $role): void {
         if ($role === 'admin') return;
@@ -131,6 +139,14 @@ try {
             if ($name === '') throw new InvalidArgumentException('Zadajte názov kategórie.');
             if (mb_strlen($name) > 100) throw new InvalidArgumentException('Názov kategórie je príliš dlhý (max 100 znakov).');
             $verifyVenue($slug);
+
+            if ($userPlan === 'free') {
+                $cntSt = $db->prepare("SELECT COUNT(*) FROM categories WHERE venue_slug = ?");
+                $cntSt->execute([$slug]);
+                if ((int)$cntSt->fetchColumn() >= 3) {
+                    throw new InvalidArgumentException('Dosiahli ste limit 3 kategórií pre Free plán. Prejdite na Paid pre neobmedzený počet.');
+                }
+            }
 
             $maxSt = $db->prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM categories WHERE venue_slug = ?");
             $maxSt->execute([$slug]);
@@ -248,6 +264,14 @@ try {
             } else {
                 if ($catId < 1) throw new InvalidArgumentException('Chýba ID kategórie.');
                 $cat = $getCategory($catId);
+
+                if ($userPlan === 'free') {
+                    $itemCntSt = $db->prepare("SELECT COUNT(*) FROM items WHERE category_id = ?");
+                    $itemCntSt->execute([$catId]);
+                    if ((int)$itemCntSt->fetchColumn() >= 5) {
+                        throw new InvalidArgumentException('Dosiahli ste limit 5 jedál na kategóriu pre Free plán.');
+                    }
+                }
 
                 $image = null;
                 if (is_string($rawImage) && str_starts_with($rawImage, 'data:image')) {

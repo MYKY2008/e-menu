@@ -12,7 +12,7 @@ $totalUsers  = (int)$db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $totalVenues = (int)$db->query("SELECT COUNT(*) FROM venues")->fetchColumn();
 
 $users = $db->query("
-    SELECT u.id, u.username, u.role, u.venue_limit, u.created_at, u.is_verified,
+    SELECT u.id, u.username, u.role, u.plan, u.venue_limit, u.created_at, u.is_verified,
            COUNT(v.slug) AS venue_count
     FROM users u
     LEFT JOIN venues v ON v.user_id = u.id
@@ -134,6 +134,7 @@ $flash = getFlash();
           <tr>
             <th class="px-6 py-3 text-left">E-mail</th>
             <th class="px-6 py-3 text-left">Rola</th>
+            <th class="px-6 py-3 text-left">Plán</th>
             <th class="px-6 py-3 text-left">Prevádzky</th>
             <th class="px-6 py-3 text-left">Limit</th>
             <th class="px-6 py-3 text-left">Registrovaný</th>
@@ -163,6 +164,16 @@ $flash = getFlash();
                     : 'bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' ?>">
                 <?= $u['role'] ?>
               </span>
+            </td>
+            <td class="px-6 py-4">
+              <?php $uPlan = $u['plan'] ?? 'free'; ?>
+              <select onchange="updatePlan(<?= $u['id'] ?>, this.value)"
+                      class="bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-1.5 text-xs font-semibold
+                             focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200
+                             <?= $uPlan === 'paid' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400' ?>">
+                <option value="free" <?= $uPlan === 'free' ? 'selected' : '' ?>>Free</option>
+                <option value="paid" <?= $uPlan === 'paid' ? 'selected' : '' ?>>Paid</option>
+              </select>
             </td>
             <td class="px-6 py-4 text-slate-500 dark:text-slate-400"><?= $u['venue_count'] ?></td>
             <td class="px-6 py-4">
@@ -491,6 +502,14 @@ async function updateLimit(userId, limit) {
   } catch { toast('Sieťová chyba.', 'error'); }
 }
 
+async function updatePlan(userId, plan) {
+  try {
+    const data = await adminApi({ action: 'update_plan', user_id: userId, plan });
+    if (data.ok) toast('Plán aktualizovaný.', 'success');
+    else toast(data.error || 'Chyba.', 'error');
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+
 async function deleteUser(userId, username) {
   if (!confirm(`Naozaj zmazať účet "${username}" a všetky jeho prevádzky?`)) return;
   try {
@@ -534,9 +553,6 @@ async function submitReset() {
   } catch { toast('Sieťová chyba.', 'error'); }
 }
 
-document.getElementById('pw-modal').addEventListener('click', function(e) {
-  if (e.target === this) closePwModal();
-});
 
 function openCreateUser() {
   document.getElementById('cu-email').value  = '';
@@ -586,9 +602,6 @@ async function submitCreateUser() {
     } else toast(data.error || 'Chyba.', 'error');
   } catch { toast('Sieťová chyba.', 'error'); }
 }
-document.getElementById('cu-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeCreateUser();
-});
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -640,9 +653,6 @@ async function submitDeleteAccount() {
   } catch { toast('Sieťová chyba.', 'error'); }
 }
 
-document.getElementById('modal-delete-account').addEventListener('click', function(e) {
-  if (e.target === this) this.classList.add('hidden');
-});
 
 async function submitPasswordChange() {
   const oldPw  = document.getElementById('cp-old').value;
@@ -667,8 +677,29 @@ async function submitPasswordChange() {
   } catch { toast('Sieťová chyba.', 'error'); }
 }
 
-document.getElementById('modal-profile').addEventListener('click', function(e) {
-  if (e.target === this) this.classList.add('hidden');
+// ── Modal utils & backdrop close ──────────────────────────────────
+function openModal(id)  { document.getElementById(id)?.classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
+
+[['pw-modal', () => closePwModal()], ['cu-modal', () => closeCreateUser()],
+ ['modal-delete-account', () => closeModal('modal-delete-account')],
+ ['modal-profile',        () => closeModal('modal-profile')]].forEach(([id, fn]) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let _d = false;
+  el.addEventListener('mousedown', e => { _d = e.target === el; });
+  el.addEventListener('mouseup',   e => { if (_d && e.target === el) fn(); });
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  ['pw-modal', 'cu-modal', 'modal-delete-account', 'modal-profile'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.classList.contains('hidden')) {
+      if (id === 'pw-modal') closePwModal();
+      else if (id === 'cu-modal') closeCreateUser();
+      else closeModal(id);
+    }
+  });
 });
 
 function toast(msg, type = 'info') {

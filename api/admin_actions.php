@@ -124,6 +124,17 @@ try {
             exit;
         }
 
+        // ── Update plan ───────────────────────────────────────
+        case 'update_plan': {
+            $uid  = (int)($payload['user_id'] ?? 0);
+            $plan = in_array($payload['plan'] ?? '', ['free', 'paid'], true) ? $payload['plan'] : 'free';
+            if ($uid < 1) throw new InvalidArgumentException('Neplatné ID.');
+            $db->prepare("UPDATE users SET plan = ? WHERE id = ?")->execute([$plan, $uid]);
+            ob_end_clean();
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
         // ── Delete venue ──────────────────────────────────────
         case 'delete_venue': {
             $slug = sanitizeSlug((string)($payload['slug'] ?? ''));

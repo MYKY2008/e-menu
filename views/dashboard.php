@@ -16,9 +16,11 @@ $stVenues = $db->prepare("SELECT * FROM venues WHERE user_id = ? ORDER BY create
 $stVenues->execute([$userId]);
 $venues = $stVenues->fetchAll();
 
-$stLimit = $db->prepare("SELECT venue_limit FROM users WHERE id = ?");
+$stLimit = $db->prepare("SELECT venue_limit, plan FROM users WHERE id = ?");
 $stLimit->execute([$userId]);
-$venueLimit = (int)($stLimit->fetchColumn() ?? 1);
+$stLimitRow = $stLimit->fetch() ?: [];
+$venueLimit = (int)($stLimitRow['venue_limit'] ?? 1);
+$userPlan   = $role === 'admin' ? 'paid' : (string)($stLimitRow['plan'] ?? 'free');
 $venueCount = count($venues);
 
 $selected = null;
@@ -143,7 +145,15 @@ $EU_ALLERGENS = [
 
     <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-4 border border-gray-100 dark:border-slate-800">
       <div class="flex items-center justify-between mb-3">
-        <span class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest">Prevádzky</span>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest">Prevádzky</span>
+          <?php if ($role !== 'admin'): ?>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold
+                       <?= $userPlan === 'paid' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-gray-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' ?>">
+            <?= $userPlan === 'paid' ? 'Paid' : 'Free' ?>
+          </span>
+          <?php endif; ?>
+        </div>
         <span class="text-xs text-slate-400">
           <?= $venueCount ?>/<?= ($role==='admin'||$venueLimit===9999)?'∞':$venueLimit ?>
         </span>
@@ -526,10 +536,14 @@ $EU_ALLERGENS = [
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
         <div class="flex items-center justify-between mb-4">
           <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Kategórie a jedlá</p>
-          <button onclick="openCatModal(null)"
-                  class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700
-                         text-white text-xs font-bold rounded-2xl transition">
-            + Kategória
+          <?php $catLimitReached = $userPlan === 'free' && count($menuCategories) >= 3; ?>
+          <button id="btn-add-cat" onclick="openCatModal(null)"
+                  <?= $catLimitReached ? 'title="Dosiahnutý limit 3 kategórií (Free plán)"' : '' ?>
+                  class="px-4 py-2 rounded-2xl transition text-xs font-bold
+                         <?= $catLimitReached
+                             ? 'bg-gray-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 opacity-60'
+                             : 'bg-emerald-600 hover:bg-emerald-700 text-white' ?>">
+            <?= $catLimitReached ? '🔒 Limit (Free)' : '+ Kategória' ?>
           </button>
         </div>
         <!-- Live search -->
@@ -987,7 +1001,8 @@ const APP_URL = <?= json_encode(rtrim(url(), '/')) ?>;
 const BASE_URL= <?= json_encode(rtrim(baseUrl(), '/')) ?>;
 const CUR_SLUG= <?= json_encode($selected ? $selected['slug'] : '') ?>;
 const PAL     = <?= json_encode(getPalette()) ?>;
-const GASTRO  = <?= json_encode($GASTRO_THEMES) ?>;   // [{bg, name}, ...]
+const GASTRO    = <?= json_encode($GASTRO_THEMES) ?>;   // [{bg, name}, ...]
+const USER_PLAN = <?= json_encode($userPlan) ?>;
 
 let menuData = {
   categories: <?= json_encode($menuCategories, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1225,14 +1240,25 @@ function selectEmoji(emoji) {
 function openModal(id)  { document.getElementById(id)?.classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
 
-['modal-cat', 'modal-item', 'modal-confirm-slug', 'modal-profile', 'modal-delete-account'].forEach(id => {
-  document.getElementById(id)?.addEventListener('click', e => {
-    if (e.target === document.getElementById(id)) closeModal(id);
-  });
+const MODAL_IDS = ['modal-cat', 'modal-item', 'modal-confirm-slug', 'modal-profile', 'modal-delete-account'];
+MODAL_IDS.forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let _d = false;
+  el.addEventListener('mousedown', e => { _d = e.target === el; });
+  el.addEventListener('mouseup',   e => { if (_d && e.target === el) closeModal(id); });
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  MODAL_IDS.forEach(id => { const el = document.getElementById(id); if (el && !el.classList.contains('hidden')) closeModal(id); });
 });
 
 // ── Category modal ────────────────────────────────────────────────
 function openCatModal(catId) {
+  if (catId === null && USER_PLAN === 'free' && menuData.categories.length >= 3) {
+    toast('Dosiahli ste limit 3 kategórií pre Free plán. Prejdite na Paid pre neobmedzený počet.', 'error');
+    return;
+  }
   document.getElementById('mc-id').value = catId ?? '';
   document.getElementById('modal-cat-title').textContent =
     catId ? 'Upraviť kategóriu' : 'Nová kategória';
@@ -1288,6 +1314,13 @@ async function deleteCatData(id, name) {
 
 // ── Item modal ────────────────────────────────────────────────────
 function openItemModal(itemId, catId) {
+  if (itemId === null && USER_PLAN === 'free') {
+    const _cat = menuData.categories.find(c => c.id === catId);
+    if (_cat && _cat.items.length >= 5) {
+      toast('Dosiahli ste limit 5 jedál na kategóriu pre Free plán.', 'error');
+      return;
+    }
+  }
   document.getElementById('mi-id').value     = itemId ?? '';
   document.getElementById('mi-cat-id').value = catId  ?? '';
   document.getElementById('modal-item-title').textContent =
@@ -1408,7 +1441,19 @@ function applyMenuData(data) {
   if (Array.isArray(data.categories)) menuData.categories = data.categories;
   if (data.settings)                  menuData.settings   = data.settings;
   renderMenuTree();
+  updateCatLimitBtn();
   updatePreview();
+}
+
+function updateCatLimitBtn() {
+  const btn = document.getElementById('btn-add-cat');
+  if (!btn || USER_PLAN !== 'free') return;
+  const reached   = menuData.categories.length >= 3;
+  btn.title       = reached ? 'Dosiahnutý limit 3 kategórií (Free plán)' : '';
+  btn.textContent = reached ? '🔒 Limit (Free)' : '+ Kategória';
+  btn.className   = reached
+    ? 'px-4 py-2 rounded-2xl transition text-xs font-bold bg-gray-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 opacity-60'
+    : 'px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl transition';
 }
 
 // ── Venue AJAX ────────────────────────────────────────────────────
@@ -1535,8 +1580,9 @@ function renderMenuTree() {
     const catBg = cat.bg_color || menuData.settings.default_category_color || '#1E3A5F';
     const catTc = yiq(catBg);
     // First render: only first open. Re-renders: preserve state (new cats default open).
-    const isOpen = openStates[cat.id] !== undefined ? openStates[cat.id] : (firstRender ? idx === 0 : true);
-    const cvRot  = isOpen ? ' rotate-180' : '';
+    const isOpen           = openStates[cat.id] !== undefined ? openStates[cat.id] : (firstRender ? idx === 0 : true);
+    const cvRot            = isOpen ? ' rotate-180' : '';
+    const itemLimitReached = USER_PLAN === 'free' && cat.items.length >= 5;
     const CHEVRON = `<svg class="cat-chevron w-3 h-3 flex-shrink-0 transition-transform duration-200${cvRot}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
 
     const items = cat.items.map(item => `
@@ -1590,11 +1636,12 @@ function renderMenuTree() {
           </div>
           <div class="px-4 pb-3 bg-white dark:bg-slate-900">
             <button onclick="openItemModal(null,${cat.id})"
-                    class="w-full py-2.5 border border-dashed border-gray-200 dark:border-slate-700 rounded-2xl
-                           text-xs text-slate-400 dark:text-slate-500
-                           hover:text-indigo-600 dark:hover:text-indigo-400
-                           hover:border-indigo-300 dark:hover:border-indigo-700 transition">
-              + Pridať jedlo
+                    title="${itemLimitReached ? 'Dosiahnutý limit 5 jedál na kategóriu (Free plán)' : ''}"
+                    class="w-full py-2.5 border border-dashed rounded-2xl text-xs transition
+                           ${itemLimitReached
+                             ? 'border-gray-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 opacity-60 cursor-default'
+                             : 'border-gray-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-700'}">
+              ${itemLimitReached ? '🔒 Limit jedál (Free)' : '+ Pridať jedlo'}
             </button>
           </div>
         </div>

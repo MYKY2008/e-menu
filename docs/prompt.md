@@ -1,40 +1,50 @@
-# PROMPT: Unifikácia dizajnu v rámci Dashboardu (Nastavenia vs. Menu)
+# PROMPT: Implementácia plánov (Free vs. Paid) a limitov pre menu
 
-**CIEĽ:** Dosiahnuť úplnú vizuálnu a štrukturálnu konzistenciu medzi záložkou "Nastavenia" (správa prevádzky) a záložkou "Menu" (správa kategórií a jedál) v rámci dashboardu. Obe sekcie musia zdieľať rovnaký vizuálny jazyk, paddingy a štýly komponentov.
+**CIEĽ:** Zaviesť systém plánov pre používateľov. Používatelia s plánom "free" budú mať obmedzený počet kategórií (max 3) a jedál (max 5 na kategóriu). Administrátor bude môcť v admin paneli vidieť a meniť plán používateľa.
 
 ---
 
-### 🛠️ ÚLOHA 1: Unifikácia tabu "Nastavenia" (Venue Settings)
+### 🛠️ ÚLOHA 1: Databázová migrácia
+**Súbor:** `config.php`
+**Inštrukcie:**
+1. Do tabuľky `users` pridaj stĺpec `plan TEXT NOT NULL DEFAULT 'free'`.
+2. Pridaj príslušný `ALTER TABLE` príkaz do poľa `$migrations`.
+
+---
+
+### 🛠️ ÚLOHA 2: Administrátorské rozhranie (Admin Panel)
+**Súbor:** `views/admin.php`
+**Inštrukcie:**
+1. V tabuľke používateľov pridaj stĺpec "Plán".
+2. Zobraz aktuálny plán (Free/Paid) pomocou farebného odznaku (Pill).
+   - Free: `bg-gray-100 text-slate-600`
+   - Paid: `bg-emerald-100 text-emerald-700` (alebo indigo)
+3. Umožni administrátorovi zmeniť plán používateľa (napr. cez jednoduchý select v riadku tabuľky, ktorý okamžite po zmene zavolá API).
+4. V `api/admin_actions.php` implementuj akciu `update_plan`.
+
+---
+
+### 🛠️ ÚLOHA 3: Vynucovanie limitov na Backende
+**Súbor:** `api/manage_menu.php`
+**Inštrukcie:**
+1. Pri pridávaní kategórie (`add_category`) over, či má používateľ plán `free`. Ak áno, skontroluj, či už nemá 3 kategórie. Ak má, vráť chybu: "Dosiahli ste limit 3 kategórií pre Free plán. Prejdite na Paid pre neobmedzený počet."
+2. Pri pridávaní jedla (`add_item`) over, či má používateľ plán `free`. Ak áno, skontroluj, či daná kategória už nemá 5 jedál. Ak má, vráť chybu: "Dosiahli ste limit 5 jedál na kategóriu pre Free plán."
+3. Potrebuješ načítať `plan` používateľa z tabuľky `users` (pripoj k dotazu v `verifyVenue` alebo načítaj samostatne).
+
+---
+
+### 🛠️ ÚLOHA 4: Spätná väzba v Dashboarde
 **Súbor:** `views/dashboard.php`
 **Inštrukcie:**
-1. **Layout Kariet:** Záložka Nastavenia (`#tab-settings`) musí používať rovnaký systém kariet ako Menu.
-   - Všetky hlavné sekcie (Základné info, Logo/Cover, Farebná téma) obal do samostatných kariet s `rounded-[2rem]`, `p-5` a `border border-gray-100 dark:border-slate-800`.
-2. **Nadpisy:** Použi unifikovaný štýl nadpisov sekcií: `text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5`.
-3. **Tlačidlá:** Hlavné tlačidlo "Uložiť nastavenia" musí byť `rounded-2xl`, `px-5`, `py-2.5`, `font-bold` (rovnako ako "Uložiť nastavenia menu").
-4. **Inputy:** Zjednoť všetky inputy v tejto sekcii na `rounded-xl`, `px-4`, `py-2.5` (rovnako ako vyhľadávacie pole v menu).
+1. Do dashboardu pridaj informáciu o aktuálnom pláne (napr. v sidebare alebo pri názve prevádzky).
+2. Ak je používateľ Free a dosiahol limit kategórií, tlačidlo "+ Kategória" by malo byť vizuálne odlišné (napr. disabled s tooltipom alebo po kliknutí zobraziť toast s vysvetlením).
+3. Podobne ošetri tlačidlo "+ Pridať jedlo" v rámci kategórie, ak je dosiahnutý limit 5 jedál.
 
 ---
 
-### 🛠️ ÚLOHA 2: Farebná paleta prevádzky
-**Súbor:** `views/dashboard.php`
-**Inštrukcie:**
-1. Výber farby prevádzky (`currentVenueColor`) musí vizuálne ladiť s paletou v menu. 
-   - Použi rovnaký grid a zaoblené kruhy (`w-8 h-8 rounded-full`) s `ring-offset-1`.
-   - Pridaj aj sem **Custom Color Picker** (paletka 🎨), aby bolo možné nastaviť ľubovoľnú farbu prevádzky, nielen tie z palety.
+### 🎨 Dizajnové pravidlá:
+- Zachovaj minimalistický vizuál.
+- Toast správy pre chyby limitov by mali byť jasné a motivovať k upgradeu.
 
 ---
-
-### 🛠️ ÚLOHA 3: Zjednotenie detailov v "Menu" tabe
-**Súbor:** `views/dashboard.php`
-**Inštrukcie:**
-1. **Empty States:** Keď nie je vybraná prevádzka, zobrazenie prázdneho stavu musí byť vizuálne identické v oboch taboch.
-2. **Spacing:** Skontroluj `gap` medzi kartami v oboch taboch, musí byť identický (`space-y-4` alebo `space-y-6`).
-
----
-
-### 🛠️ ÚLOHA 4: Responzivita a Dark Mode
-1. Uisti sa, že oba taby vyzerajú konzistentne aj na mobilných zariadeniach.
-2. Skontroluj, či sú všetky nové prvky (najmä custom color picker v nastaveniach prevádzky) správne ostylované pre dark mode.
-
----
-**VÝSTUP:** Upravený súbor `views/dashboard.php`.
+**VÝSTUP:** Upravené súbory `config.php`, `views/admin.php`, `api/admin_actions.php`, `api/manage_menu.php` a `views/dashboard.php`.

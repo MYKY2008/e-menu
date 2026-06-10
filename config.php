@@ -108,6 +108,7 @@ function getDB(): PDO {
         "UPDATE users SET is_verified = 1 WHERE is_verified = 0",
         "ALTER TABLE categories ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE items      ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE users      ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'",
     ];
     foreach ($migrations as $sql) {
         try { $pdo->exec($sql); } catch (PDOException $ignored) {}
