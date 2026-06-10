@@ -368,6 +368,10 @@ function getGastroThemes(): array {
         ['bg' => '#3D2015', 'name' => 'Espresso'],
         ['bg' => '#3D5229', 'name' => 'Olivová zelená'],
         ['bg' => '#1E3A5F', 'name' => 'Polnočná modrá'],
+        ['bg' => '#1B4332', 'name' => 'Tmavá zelená'],
+        ['bg' => '#7D1128', 'name' => 'Bordová'],
+        ['bg' => '#111827', 'name' => 'Moderná čierna'],
+        ['bg' => '#EA580C', 'name' => 'Teplá oranžová'],
     ];
 }
 

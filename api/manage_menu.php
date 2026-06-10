@@ -298,25 +298,22 @@ try {
 
             $showAllergens = ((int)($payload['show_allergens'] ?? 1)) ? 1 : 0;
             $showFeatured  = ((int)($payload['show_featured']  ?? 1)) ? 1 : 0;
-            $darkDefault   = ((int)($payload['dark_mode_default'] ?? 0)) ? 1 : 0;
 
-            $validThemeBgs = array_column(getGastroThemes(), 'bg');
-            $catColor  = in_array($payload['default_category_color'] ?? '', $validThemeBgs, true)
+            $catColor  = preg_match('/^#[a-fA-F0-9]{6}$/', $payload['default_category_color'] ?? '')
                          ? $payload['default_category_color'] : '#1E3A5F';
-            $itemColor = in_array($payload['default_item_color'] ?? '', $validThemeBgs, true)
+            $itemColor = preg_match('/^#[a-fA-F0-9]{6}$/', $payload['default_item_color'] ?? '')
                          ? $payload['default_item_color'] : '#FFFFFF';
 
             $db->prepare("
                 INSERT INTO venue_settings
-                    (venue_slug, show_allergens, show_featured, default_category_color, default_item_color, dark_mode_default)
-                VALUES (?,?,?,?,?,?)
+                    (venue_slug, show_allergens, show_featured, default_category_color, default_item_color)
+                VALUES (?,?,?,?,?)
                 ON CONFLICT(venue_slug) DO UPDATE SET
                     show_allergens=excluded.show_allergens,
                     show_featured=excluded.show_featured,
                     default_category_color=excluded.default_category_color,
-                    default_item_color=excluded.default_item_color,
-                    dark_mode_default=excluded.dark_mode_default
-            ")->execute([$slug, $showAllergens, $showFeatured, $catColor, $itemColor, $darkDefault]);
+                    default_item_color=excluded.default_item_color
+            ")->execute([$slug, $showAllergens, $showFeatured, $catColor, $itemColor]);
 
             $touchVenue($slug);
             ob_end_clean();

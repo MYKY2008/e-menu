@@ -73,7 +73,7 @@ categories     — id, venue_slug (FK), name, icon, bg_color, sort_order, is_vis
 items          — id, category_id (FK), name, description, detail_description, price, image,
                  bg_color, sort_order, is_featured, allergens, is_visible
 venue_settings — venue_slug (FK), show_allergens, show_featured, default_category_color,
-                 default_item_color, dark_mode_default
+                 default_item_color (dark_mode_default deprecated/removed)
 scans          — id, venue_slug (FK), timestamp
 login_attempts — id, ip_address, timestamp
 ```

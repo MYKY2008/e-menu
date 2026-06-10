@@ -1,44 +1,40 @@
-# PROMPT: Skrývanie kategórií a jedál (Visibility Toggle)
+# PROMPT: Unifikácia dizajnu v rámci Dashboardu (Nastavenia vs. Menu)
 
-**CIEĽ:** Umožniť používateľom dočasne skryť celú kategóriu alebo konkrétne jedlo z ponuky bez nutnosti ich mazania.
-
----
-
-### 🛠️ ÚLOHA 1: Databázová migrácia
-**Súbor:** `config.php`
-**Inštrukcie:**
-1. Do tabuliek `categories` a `items` pridaj stĺpec `is_visible INTEGER NOT NULL DEFAULT 1`.
-2. Pridaj príslušné `ALTER TABLE` príkazy do poľa `$migrations`, aby sa stĺpce pridali aj do existujúcich databáz.
+**CIEĽ:** Dosiahnuť úplnú vizuálnu a štrukturálnu konzistenciu medzi záložkou "Nastavenia" (správa prevádzky) a záložkou "Menu" (správa kategórií a jedál) v rámci dashboardu. Obe sekcie musia zdieľať rovnaký vizuálny jazyk, paddingy a štýly komponentov.
 
 ---
 
-### 🛠️ ÚLOHA 2: Backend Logika (Toggling)
-**Súbor:** `api/manage_menu.php`
-**Inštrukcie:**
-1. Vytvor novú akciu `toggle_visibility`.
-2. Akcia musí prijímať `type` ('category' alebo 'item') a `id`.
-3. Over vlastníctvo daného prvku (využi `$getCategory` alebo `$getItem`).
-4. Prepni hodnotu `is_visible` (0 -> 1, 1 -> 0).
-5. Nezabudni zavolať `$touchVenue()` pre premazanie cache na klientskej strane.
-
----
-
-### 🛠️ ÚLOHA 3: UI v Administrácii
+### 🛠️ ÚLOHA 1: Unifikácia tabu "Nastavenia" (Venue Settings)
 **Súbor:** `views/dashboard.php`
 **Inštrukcie:**
-1. **Renderovanie:** V `renderMenuTree()` pridaj vedľa tlačidiel pre editáciu/zmazanie nové tlačidlo na prepínanie viditeľnosti (ikona oka).
-   - Ak je prvok skrytý (`is_visible == 0`): Ikona prečiarknutého oka, prvok v zozname môže mať jemne zníženú opacitu (`opacity-50`).
-   - Ak je prvok viditeľný: Normálna ikona oka.
-2. **JavaScript:** Implementuj funkciu `toggleVisibility(type, id)`, ktorá zavolá nové API a aktualizuje `menuData`.
-3. **Live Preview:** Uprav `updatePreview()`, aby sa v iPhone náhľade vôbec nezobrazovali skryté kategórie a skryté jedlá.
+1. **Layout Kariet:** Záložka Nastavenia (`#tab-settings`) musí používať rovnaký systém kariet ako Menu.
+   - Všetky hlavné sekcie (Základné info, Logo/Cover, Farebná téma) obal do samostatných kariet s `rounded-[2rem]`, `p-5` a `border border-gray-100 dark:border-slate-800`.
+2. **Nadpisy:** Použi unifikovaný štýl nadpisov sekcií: `text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5`.
+3. **Tlačidlá:** Hlavné tlačidlo "Uložiť nastavenia" musí byť `rounded-2xl`, `px-5`, `py-2.5`, `font-bold` (rovnako ako "Uložiť nastavenia menu").
+4. **Inputy:** Zjednoť všetky inputy v tejto sekcii na `rounded-xl`, `px-4`, `py-2.5` (rovnako ako vyhľadávacie pole v menu).
 
 ---
 
-### 🛠️ ÚLOHA 4: Klientske zobrazenie
-**Súbor:** `views/client_view.php`
+### 🛠️ ÚLOHA 2: Farebná paleta prevádzky
+**Súbor:** `views/dashboard.php`
 **Inštrukcie:**
-1. Uprav SQL dotazy tak, aby sa načítavali iba kategórie a jedlá, ktoré majú `is_visible = 1`.
-2. Uisti sa, že ak je kategória viditeľná, ale neobsahuje žiadne viditeľné jedlá, tak sa tiež nezobrazí (toto by malo fungovať automaticky po úprave dotazov).
+1. Výber farby prevádzky (`currentVenueColor`) musí vizuálne ladiť s paletou v menu. 
+   - Použi rovnaký grid a zaoblené kruhy (`w-8 h-8 rounded-full`) s `ring-offset-1`.
+   - Pridaj aj sem **Custom Color Picker** (paletka 🎨), aby bolo možné nastaviť ľubovoľnú farbu prevádzky, nielen tie z palety.
 
 ---
-**VÝSTUP:** Upravené súbory `config.php`, `api/manage_menu.php`, `views/dashboard.php` a `views/client_view.php`.
+
+### 🛠️ ÚLOHA 3: Zjednotenie detailov v "Menu" tabe
+**Súbor:** `views/dashboard.php`
+**Inštrukcie:**
+1. **Empty States:** Keď nie je vybraná prevádzka, zobrazenie prázdneho stavu musí byť vizuálne identické v oboch taboch.
+2. **Spacing:** Skontroluj `gap` medzi kartami v oboch taboch, musí byť identický (`space-y-4` alebo `space-y-6`).
+
+---
+
+### 🛠️ ÚLOHA 4: Responzivita a Dark Mode
+1. Uisti sa, že oba taby vyzerajú konzistentne aj na mobilných zariadeniach.
+2. Skontroluj, či sú všetky nové prvky (najmä custom color picker v nastaveniach prevádzky) správne ostylované pre dark mode.
+
+---
+**VÝSTUP:** Upravený súbor `views/dashboard.php`.

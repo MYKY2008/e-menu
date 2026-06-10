@@ -72,14 +72,12 @@ $settings = $ssSt->fetch() ?: [
     'show_featured'          => 1,
     'default_category_color' => '#1E3A5F',
     'default_item_color'     => '#FFFFFF',
-    'dark_mode_default'      => 0,
 ];
 
 $accentArr  = resolveColor($venue['color']);
 $accentHex  = $accentArr['hex'];
 $accentText = menuTextColor($accentHex);
 
-$darkDefault = (int)($settings['dark_mode_default'] ?? 0);
 $defCatBg    = $settings['default_category_color'] ?? '#1E3A5F';
 $defItemBg   = $settings['default_item_color']     ?? '#FFFFFF';
 
@@ -138,8 +136,9 @@ $AL = [
 <!-- Anti-flash: set dark class before any render -->
 <script>
 (function(){
-  var s=localStorage.getItem('gl-dark'),d=<?= $darkDefault ?>;
-  if(s!==null?s==='1':d===1)document.documentElement.classList.add('dark');
+  var s=localStorage.getItem('gl-dark');
+  if(s!==null?s==='1':window.matchMedia('(prefers-color-scheme: dark)').matches)
+    document.documentElement.classList.add('dark');
 })();
 </script>
 

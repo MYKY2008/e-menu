@@ -38,7 +38,6 @@ $menuSettings   = [
     'show_featured'          => 1,
     'default_category_color' => '#1E3A5F',
     'default_item_color'     => '#FFFFFF',
-    'dark_mode_default'      => 0,
 ];
 if ($selected) {
     $catSt = $db->prepare("SELECT * FROM categories WHERE venue_slug = ? ORDER BY sort_order, id");
@@ -180,7 +179,7 @@ $EU_ALLERGENS = [
       <?php if ($venueCount < $venueLimit || $role === 'admin'): ?>
       <button onclick="openNewVenue()"
               class="mt-3 w-full py-2 bg-emerald-600 hover:bg-emerald-700
-                     text-white text-xs font-bold rounded-xl transition">
+                     text-white text-xs font-bold rounded-2xl transition">
         + Nová prevádzka
       </button>
       <?php endif; ?>
@@ -241,163 +240,173 @@ $EU_ALLERGENS = [
     </div>
 
     <!-- ── Tab: Settings ─────────────────────────────────────────── -->
-    <div id="tab-settings" class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-6 border border-gray-100 dark:border-slate-800">
-      <h2 id="settings-title" class="font-bold text-slate-800 dark:text-white text-sm mb-5">
-        <?= $selected ? 'Upraviť prevádzku' : 'Nová prevádzka' ?>
-      </h2>
-      <div class="space-y-4">
-        <input type="hidden" id="f-original-slug" value="<?= $selected ? e($selected['slug']) : '' ?>">
+    <div id="tab-settings" class="space-y-4">
 
-        <!-- Slug -->
-        <div>
-          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">URL slug *</label>
-          <div class="flex rounded-xl bg-gray-100 dark:bg-slate-800 overflow-hidden
-                      focus-within:ring-2 focus-within:ring-indigo-500 transition-all duration-200">
-            <span class="text-slate-500 dark:text-slate-400 text-xs px-3 flex items-center border-r border-gray-200 dark:border-slate-700">
-              /r/
-            </span>
-            <input id="f-slug" type="text" required maxlength="50"
-                   pattern="[a-z0-9][a-z0-9_\-]{1,49}"
-                   class="flex-1 px-3 py-3 text-sm outline-none bg-transparent text-slate-900 dark:text-slate-100"
-                   value="<?= $selected ? e($selected['slug']) : '' ?>"
-                   placeholder="nazov-podniku"
+      <!-- Card: Základné info -->
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
+        <p id="settings-title" class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">
+          <?= $selected ? 'Upraviť prevádzku' : 'Nová prevádzka' ?>
+        </p>
+        <input type="hidden" id="f-original-slug" value="<?= $selected ? e($selected['slug']) : '' ?>">
+        <div class="space-y-4">
+
+          <!-- Slug -->
+          <div>
+            <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">URL slug *</label>
+            <div class="flex rounded-xl bg-gray-100 dark:bg-slate-800 overflow-hidden
+                        focus-within:ring-2 focus-within:ring-indigo-500 transition-all duration-200">
+              <span class="text-slate-500 dark:text-slate-400 text-xs px-3 flex items-center border-r border-gray-200 dark:border-slate-700">
+                /r/
+              </span>
+              <input id="f-slug" type="text" required maxlength="50"
+                     pattern="[a-z0-9][a-z0-9_\-]{1,49}"
+                     class="flex-1 px-3 py-2.5 text-sm outline-none bg-transparent text-slate-900 dark:text-slate-100"
+                     value="<?= $selected ? e($selected['slug']) : '' ?>"
+                     placeholder="nazov-podniku"
+                     oninput="updatePreview()">
+            </div>
+          </div>
+
+          <!-- Name -->
+          <div>
+            <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Názov podniku *</label>
+            <input id="f-name" type="text" required maxlength="200"
+                   class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                          text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                   value="<?= $selected ? e($selected['name']) : '' ?>"
+                   placeholder="Kaviareň U Márie"
                    oninput="updatePreview()">
           </div>
-        </div>
 
-        <!-- Name -->
-        <div>
-          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Názov podniku *</label>
-          <input id="f-name" type="text" required maxlength="200"
-                 class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
-                        text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-                 value="<?= $selected ? e($selected['name']) : '' ?>"
-                 placeholder="Kaviareň U Márie"
-                 oninput="updatePreview()">
-        </div>
-
-        <!-- URL fields (Google + Instagram ONLY) -->
-        <?php foreach ([
-            ['f-google', 'Google Recenzie (URL)', $selected['google_url']    ?? ''],
-            ['f-insta',  'Instagram (URL)',        $selected['instagram_url'] ?? ''],
-        ] as [$fid, $label, $val]): ?>
-        <div>
-          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block"><?= $label ?></label>
-          <input id="<?= $fid ?>" type="url"
-                 class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
-                        text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-                 value="<?= e($val) ?>" placeholder="https://"
-                 oninput="updatePreview()">
-        </div>
-        <?php endforeach; ?>
-
-        <!-- Theme color (venue accent) -->
-        <div>
-          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 block">Farba témy / hlavičky</label>
-          <div class="flex flex-wrap gap-2 mb-3">
-            <?php foreach ($pal as $key => $info): ?>
-            <button type="button" onclick="setVenueColor('<?= e($key) ?>')"
-                    title="<?= e($info['label']) ?>"
-                    data-vc="<?= e($key) ?>"
-                    class="vc-btn w-7 h-7 rounded-full border-2 transition ring-offset-1"
-                    style="background:<?= e($info['swatch']) ?>;
-                           border-color:<?= ($selected&&$selected['color']===$key)?'#6366f1':'transparent' ?>">
-            </button>
-            <?php endforeach; ?>
+          <!-- URL fields (Google + Instagram) -->
+          <?php foreach ([
+              ['f-google', 'Google Recenzie (URL)', $selected['google_url']    ?? ''],
+              ['f-insta',  'Instagram (URL)',        $selected['instagram_url'] ?? ''],
+          ] as [$fid, $label, $val]): ?>
+          <div>
+            <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block"><?= $label ?></label>
+            <input id="<?= $fid ?>" type="url"
+                   class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                          text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                   value="<?= e($val) ?>" placeholder="https://"
+                   oninput="updatePreview()">
           </div>
-          <label class="flex items-center gap-3 px-3 py-2.5 rounded-xl
-                        bg-gray-100 dark:bg-slate-800 cursor-pointer
-                        hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-200
-                        w-fit">
-            <input type="color" id="f-color-picker"
-                   class="w-6 h-6 rounded-md cursor-pointer border-0 p-0 bg-transparent"
-                   value="<?= ($selected&&preg_match('/^#[0-9a-fA-F]{6}$/',$selected['color']))
-                               ? e($selected['color']) : '#111827' ?>"
-                   oninput="setVenueColor(this.value)">
-            <span class="text-xs font-semibold text-slate-600 dark:text-slate-400 select-none">
-              Vlastná farba
-            </span>
-          </label>
-          <input type="hidden" id="f-color" value="<?= $selected ? e($selected['color']) : 'black' ?>">
-        </div>
+          <?php endforeach; ?>
 
-        <!-- Logo -->
-        <div>
-          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Logo (voliteľné)</label>
-          <div id="logo-preview-wrap"
-               class="<?= ($selected&&$selected['logo']) ? '' : 'hidden' ?> mb-3">
-            <img id="logo-preview"
-                 src="<?= ($selected&&$selected['logo']) ? e(imgUrl($selected['logo'])) : '' ?>"
-                 alt="" class="h-14 w-14 object-contain rounded-xl border border-slate-200 dark:border-slate-700">
-            <button type="button" onclick="clearLogo()"
-                    class="mt-1 text-xs text-red-500 dark:text-red-400 hover:underline block">
-              Odstrániť logo
-            </button>
-          </div>
-          <input type="file" id="f-logo-file" accept="image/*"
-                 class="text-xs text-slate-500 dark:text-slate-400 w-full
-                        file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
-                        file:text-xs file:font-semibold
-                        file:bg-indigo-50 dark:file:bg-indigo-900/30
-                        file:text-indigo-700 dark:file:text-indigo-400
-                        hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50">
-          <input type="hidden" id="f-logo"
-                 value="<?= ($selected&&$selected['logo']) ? e(imgUrl($selected['logo'])) : '' ?>">
-          <p class="text-[11px] text-slate-400 mt-1.5">
-            Max 512 KB · automaticky orezané na 256 × 256 px
-          </p>
-        </div>
-
-        <!-- Cover image -->
-        <div>
-          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">
-            Cover fotka <span class="text-slate-400 font-normal">(voliteľné · zobrazí sa namiesto farebnej hlavičky)</span>
-          </label>
-          <div id="cover-preview-wrap"
-               class="<?= ($selected && !empty($selected['cover_image'])) ? '' : 'hidden' ?> mb-3">
-            <img id="cover-preview"
-                 src="<?= ($selected && !empty($selected['cover_image'])) ? e(imgUrl($selected['cover_image'])) : '' ?>"
-                 alt="" class="w-full h-28 object-cover rounded-2xl border border-gray-200 dark:border-slate-700">
-            <button type="button" onclick="clearCover()"
-                    class="mt-1 text-xs text-red-500 dark:text-red-400 hover:underline block">
-              Odstrániť cover fotku
-            </button>
-          </div>
-          <input type="file" id="f-cover-file" accept="image/*"
-                 class="text-xs text-slate-500 dark:text-slate-400 w-full
-                        file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
-                        file:text-xs file:font-semibold
-                        file:bg-indigo-50 dark:file:bg-indigo-900/30
-                        file:text-indigo-700 dark:file:text-indigo-400
-                        hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50">
-          <input type="hidden" id="f-cover"
-                 value="<?= ($selected && !empty($selected['cover_image'])) ? e(imgUrl($selected['cover_image'])) : '' ?>">
-          <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-            Max 1 MB · automaticky orezané na 1200 × 400 px (3:1)
-          </p>
-        </div>
-
-        <!-- Actions -->
-        <div class="flex gap-2 pt-1">
-          <button id="btn-save-venue" type="button" onclick="saveVenue()"
-                  class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white
-                         font-bold py-2.5 rounded-xl text-sm transition">
-            Uložiť nastavenia
-          </button>
-          <?php if ($selected): ?>
-          <button type="button" onclick="deleteVenue('<?= e($selected['slug']) ?>')"
-                  class="px-4 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50
-                         text-red-600 dark:text-red-400
-                         font-bold py-2.5 rounded-xl text-sm transition">
-            Zmazať
-          </button>
-          <?php endif; ?>
         </div>
       </div>
+
+      <!-- Card: Farba témy -->
+      <?php $currentVenueHex = $selected ? resolveColor($selected['color'])['hex'] : ''; ?>
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
+        <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-4">Farba témy / hlavičky</p>
+        <div class="flex flex-wrap gap-2">
+          <?php foreach ($GASTRO_THEMES as $gt): ?>
+          <button type="button" onclick="setVenueColor('<?= e($gt['bg']) ?>')"
+                  title="<?= e($gt['name']) ?>"
+                  data-vc="<?= e($gt['bg']) ?>"
+                  class="vc-btn w-8 h-8 rounded-full border-2 border-slate-200 dark:border-slate-700 transition ring-offset-1"
+                  style="background:<?= e($gt['bg']) ?>;<?= ($currentVenueHex===$gt['bg']) ? 'border-color:#6366f1' : '' ?>">
+          </button>
+          <?php endforeach; ?>
+          <!-- Custom color picker -->
+          <label class="relative w-8 h-8 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600
+                        hover:border-indigo-400 dark:hover:border-indigo-500 transition cursor-pointer
+                        flex items-center justify-center" title="Vlastná farba">
+            <span class="text-sm pointer-events-none">🎨</span>
+            <input type="color" id="f-color-picker" class="sr-only"
+                   value="<?= $selected ? e(resolveColor($selected['color'])['hex']) : '#111827' ?>"
+                   oninput="setVenueColor(this.value)">
+          </label>
+        </div>
+        <input type="hidden" id="f-color" value="<?= $selected ? e($selected['color']) : '#111827' ?>">
+      </div>
+
+      <!-- Card: Logo & Cover -->
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
+        <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">Logo &amp; Cover fotka</p>
+        <div class="space-y-5">
+
+          <!-- Logo -->
+          <div>
+            <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Logo (voliteľné)</label>
+            <div id="logo-preview-wrap"
+                 class="<?= ($selected&&$selected['logo']) ? '' : 'hidden' ?> mb-3">
+              <img id="logo-preview"
+                   src="<?= ($selected&&$selected['logo']) ? e(imgUrl($selected['logo'])) : '' ?>"
+                   alt="" class="h-14 w-14 object-contain rounded-xl border border-slate-200 dark:border-slate-700">
+              <button type="button" onclick="clearLogo()"
+                      class="mt-1 text-xs text-red-500 dark:text-red-400 hover:underline block">
+                Odstrániť logo
+              </button>
+            </div>
+            <input type="file" id="f-logo-file" accept="image/*"
+                   class="text-xs text-slate-500 dark:text-slate-400 w-full
+                          file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
+                          file:text-xs file:font-semibold
+                          file:bg-indigo-50 dark:file:bg-indigo-900/30
+                          file:text-indigo-700 dark:file:text-indigo-400
+                          hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50">
+            <input type="hidden" id="f-logo"
+                   value="<?= ($selected&&$selected['logo']) ? e(imgUrl($selected['logo'])) : '' ?>">
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+              Max 512 KB · automaticky orezané na 256 × 256 px
+            </p>
+          </div>
+
+          <!-- Cover image -->
+          <div>
+            <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">
+              Cover fotka <span class="text-slate-400 font-normal">(voliteľné · namiesto farebnej hlavičky)</span>
+            </label>
+            <div id="cover-preview-wrap"
+                 class="<?= ($selected && !empty($selected['cover_image'])) ? '' : 'hidden' ?> mb-3">
+              <img id="cover-preview"
+                   src="<?= ($selected && !empty($selected['cover_image'])) ? e(imgUrl($selected['cover_image'])) : '' ?>"
+                   alt="" class="w-full h-28 object-cover rounded-2xl border border-gray-200 dark:border-slate-700">
+              <button type="button" onclick="clearCover()"
+                      class="mt-1 text-xs text-red-500 dark:text-red-400 hover:underline block">
+                Odstrániť cover fotku
+              </button>
+            </div>
+            <input type="file" id="f-cover-file" accept="image/*"
+                   class="text-xs text-slate-500 dark:text-slate-400 w-full
+                          file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
+                          file:text-xs file:font-semibold
+                          file:bg-indigo-50 dark:file:bg-indigo-900/30
+                          file:text-indigo-700 dark:file:text-indigo-400
+                          hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50">
+            <input type="hidden" id="f-cover"
+                   value="<?= ($selected && !empty($selected['cover_image'])) ? e(imgUrl($selected['cover_image'])) : '' ?>">
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+              Max 1 MB · automaticky orezané na 1200 × 400 px (3:1)
+            </p>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-2">
+        <button id="btn-save-venue" type="button" onclick="saveVenue()"
+                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white
+                       font-bold py-2.5 rounded-2xl text-sm transition">
+          Uložiť nastavenia
+        </button>
+        <?php if ($selected): ?>
+        <button type="button" onclick="deleteVenue('<?= e($selected['slug']) ?>')"
+                class="px-4 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50
+                       text-red-600 dark:text-red-400
+                       font-bold py-2.5 rounded-2xl text-sm transition">
+          Zmazať
+        </button>
+        <?php endif; ?>
+      </div>
+
     </div>
 
     <!-- ── Tab: Menu ─────────────────────────────────────────────── -->
-    <div id="tab-menu" class="space-y-3 hidden">
+    <div id="tab-menu" class="space-y-4 hidden">
       <?php if (!$selected): ?>
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-12 text-center border border-gray-100 dark:border-slate-800">
         <p class="text-4xl mb-3">🍽️</p>
@@ -407,30 +416,54 @@ $EU_ALLERGENS = [
 
       <!-- Global menu settings -->
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
-        <h3 class="font-bold text-slate-700 dark:text-slate-200 text-sm mb-4">Globálne nastavenia menu</h3>
+        <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">Globálne nastavenia menu</p>
 
-        <div class="grid grid-cols-3 gap-3 mb-5">
-          <!-- Checkboxes -->
-          <?php foreach ([
-              ['m-show-featured',  'show_featured',  '⭐ Odporúčame'],
-              ['m-show-allergens', 'show_allergens',  '🔢 Alergény'],
-              ['m-dark-default',   'dark_mode_default','🌙 Temný štandardne'],
-          ] as [$id, $key, $label]): ?>
-          <label class="flex items-center gap-2 cursor-pointer select-none p-2.5 rounded-xl
+        <div class="grid grid-cols-2 gap-3 mb-5">
+          <!-- Toggle: Odporúčame -->
+          <label class="flex items-center justify-between cursor-pointer select-none p-3 rounded-xl
                         border border-gray-100 dark:border-slate-700
                         hover:bg-gray-50 dark:hover:bg-slate-800 transition">
-            <input type="checkbox" id="<?= $id ?>"
-                   class="w-4 h-4 accent-indigo-600"
-                   <?= !empty($menuSettings[$key]) ? 'checked' : '' ?>
-                   onchange="menuData.settings['<?= $key ?>']=this.checked?1:0;updatePreview()">
-            <span class="text-xs font-semibold text-slate-700 dark:text-slate-300"><?= $label ?></span>
+            <span class="flex items-center gap-2">
+              <span>⭐</span>
+              <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Odporúčame</span>
+            </span>
+            <div class="relative flex-shrink-0">
+              <input type="checkbox" id="m-show-featured" class="sr-only peer"
+                     <?= !empty($menuSettings['show_featured']) ? 'checked' : '' ?>
+                     onchange="menuData.settings['show_featured']=this.checked?1:0;updatePreview()">
+              <div class="w-10 h-5 bg-gray-200 dark:bg-slate-600 rounded-full transition-colors duration-200
+                          peer-checked:bg-indigo-600
+                          after:content-[''] after:absolute after:top-0.5 after:left-0.5
+                          after:bg-white after:rounded-full after:h-4 after:w-4
+                          after:transition-all after:duration-200
+                          peer-checked:after:translate-x-5"></div>
+            </div>
           </label>
-          <?php endforeach; ?>
+          <!-- Toggle: Alergény -->
+          <label class="flex items-center justify-between cursor-pointer select-none p-3 rounded-xl
+                        border border-gray-100 dark:border-slate-700
+                        hover:bg-gray-50 dark:hover:bg-slate-800 transition">
+            <span class="flex items-center gap-2">
+              <span>🔢</span>
+              <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Alergény</span>
+            </span>
+            <div class="relative flex-shrink-0">
+              <input type="checkbox" id="m-show-allergens" class="sr-only peer"
+                     <?= !empty($menuSettings['show_allergens']) ? 'checked' : '' ?>
+                     onchange="menuData.settings['show_allergens']=this.checked?1:0;updatePreview()">
+              <div class="w-10 h-5 bg-gray-200 dark:bg-slate-600 rounded-full transition-colors duration-200
+                          peer-checked:bg-indigo-600
+                          after:content-[''] after:absolute after:top-0.5 after:left-0.5
+                          after:bg-white after:rounded-full after:h-4 after:w-4
+                          after:transition-all after:duration-200
+                          peer-checked:after:translate-x-5"></div>
+            </div>
+          </label>
         </div>
 
         <!-- Default category theme -->
-        <div class="mb-4">
-          <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
+        <div class="mb-6">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
             Predvolená farba kategórií
           </p>
           <div class="flex flex-wrap gap-2">
@@ -439,19 +472,25 @@ $EU_ALLERGENS = [
                     onclick="selectGlobalTheme('cat','<?= e($gt['bg']) ?>')"
                     data-gcat="<?= e($gt['bg']) ?>"
                     title="<?= e($gt['name']) ?>"
-                    class="gcat-btn w-8 h-8 rounded-full border-2 transition ring-offset-1"
-                    style="background:<?= e($gt['bg']) ?>;
-                           border-color:<?= ($menuSettings['default_category_color']===$gt['bg'])
-                                            ?'#6366f1':'#e2e8f0' ?>">
+                    class="gcat-btn w-8 h-8 rounded-full border-2 border-slate-200 dark:border-slate-700 transition ring-offset-1"
+                    style="background:<?= e($gt['bg']) ?>;<?= ($menuSettings['default_category_color']===$gt['bg']) ? 'border-color:#6366f1' : '' ?>">
             </button>
             <?php endforeach; ?>
+            <label class="relative w-8 h-8 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600
+                          hover:border-indigo-400 dark:hover:border-indigo-500 transition cursor-pointer
+                          flex items-center justify-center" title="Vlastná farba">
+              <span class="text-sm pointer-events-none">🎨</span>
+              <input type="color" id="m-cat-custom-color" class="sr-only"
+                     value="<?= e($menuSettings['default_category_color']) ?>"
+                     oninput="selectGlobalTheme('cat', this.value)">
+            </label>
           </div>
           <input type="hidden" id="m-cat-color" value="<?= e($menuSettings['default_category_color']) ?>">
         </div>
 
         <!-- Default item theme -->
         <div class="mb-5">
-          <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
             Predvolená farba kariet jedál
           </p>
           <div class="flex flex-wrap gap-2">
@@ -460,19 +499,25 @@ $EU_ALLERGENS = [
                     onclick="selectGlobalTheme('item','<?= e($gt['bg']) ?>')"
                     data-gitem="<?= e($gt['bg']) ?>"
                     title="<?= e($gt['name']) ?>"
-                    class="gitem-btn w-8 h-8 rounded-full border-2 transition ring-offset-1"
-                    style="background:<?= e($gt['bg']) ?>;
-                           border-color:<?= ($menuSettings['default_item_color']===$gt['bg'])
-                                            ?'#6366f1':'#e2e8f0' ?>">
+                    class="gitem-btn w-8 h-8 rounded-full border-2 border-slate-200 dark:border-slate-700 transition ring-offset-1"
+                    style="background:<?= e($gt['bg']) ?>;<?= ($menuSettings['default_item_color']===$gt['bg']) ? 'border-color:#6366f1' : '' ?>">
             </button>
             <?php endforeach; ?>
+            <label class="relative w-8 h-8 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600
+                          hover:border-indigo-400 dark:hover:border-indigo-500 transition cursor-pointer
+                          flex items-center justify-center" title="Vlastná farba">
+              <span class="text-sm pointer-events-none">🎨</span>
+              <input type="color" id="m-item-custom-color" class="sr-only"
+                     value="<?= e($menuSettings['default_item_color']) ?>"
+                     oninput="selectGlobalTheme('item', this.value)">
+            </label>
           </div>
           <input type="hidden" id="m-item-color" value="<?= e($menuSettings['default_item_color']) ?>">
         </div>
 
         <button onclick="saveMenuSettings()"
-                class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700
-                       text-white text-xs font-bold rounded-xl transition">
+                class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700
+                       text-white text-xs font-bold rounded-2xl transition">
           Uložiť nastavenia menu
         </button>
       </div>
@@ -480,10 +525,10 @@ $EU_ALLERGENS = [
       <!-- Categories & items -->
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="font-bold text-slate-700 dark:text-slate-200 text-sm">Kategórie a jedlá</h3>
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Kategórie a jedlá</p>
           <button onclick="openCatModal(null)"
                   class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700
-                         text-white text-xs font-bold rounded-xl transition">
+                         text-white text-xs font-bold rounded-2xl transition">
             + Kategória
           </button>
         </div>
@@ -547,7 +592,7 @@ $EU_ALLERGENS = [
       <div id="qr-box" class="flex justify-center mb-3"></div>
       <button onclick="downloadQR()"
               class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white
-                     text-xs font-bold rounded-xl transition">
+                     text-xs font-bold rounded-2xl transition">
         Stiahnuť PNG
       </button>
       <a href="<?= e(baseUrl() . '/r/' . $selected['slug']) ?>" target="_blank"
@@ -620,6 +665,14 @@ $EU_ALLERGENS = [
                 style="background:<?= e($gt['bg']) ?>">
         </button>
         <?php endforeach; ?>
+        <label class="relative w-9 h-9 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600
+                      hover:border-indigo-400 dark:hover:border-indigo-500 transition cursor-pointer
+                      flex items-center justify-center" title="Vlastná farba">
+          <span class="text-sm pointer-events-none">🎨</span>
+          <input type="color" id="mc-custom-color" class="sr-only"
+                 value="#ffffff"
+                 oninput="selectCatTheme(this.value)">
+        </label>
       </div>
       <input type="hidden" id="mc-color" value="">
     </div>
@@ -628,13 +681,13 @@ $EU_ALLERGENS = [
     <div class="flex gap-2">
       <button onclick="saveCat()"
               class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white
-                     font-bold py-2.5 rounded-xl text-sm transition">
+                     font-bold py-2.5 rounded-2xl text-sm transition">
         Uložiť
       </button>
       <button onclick="closeModal('modal-cat')"
               class="px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
                      text-slate-700 dark:text-slate-300
-                     font-bold py-2.5 rounded-xl text-sm transition">
+                     font-bold py-2.5 rounded-2xl text-sm transition">
         Zrušiť
       </button>
     </div>
@@ -731,6 +784,14 @@ $EU_ALLERGENS = [
                   style="background:<?= e($gt['bg']) ?>">
           </button>
           <?php endforeach; ?>
+          <label class="relative w-9 h-9 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600
+                        hover:border-indigo-400 dark:hover:border-indigo-500 transition cursor-pointer
+                        flex items-center justify-center" title="Vlastná farba">
+            <span class="text-sm pointer-events-none">🎨</span>
+            <input type="color" id="mi-custom-color" class="sr-only"
+                   value="#ffffff"
+                   oninput="selectItemTheme(this.value)">
+          </label>
         </div>
         <input type="hidden" id="mi-color" value="">
       </div>
@@ -769,13 +830,13 @@ $EU_ALLERGENS = [
     <div class="flex gap-2 mt-5">
       <button onclick="saveItemData()"
               class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white
-                     font-bold py-2.5 rounded-xl text-sm transition">
+                     font-bold py-2.5 rounded-2xl text-sm transition">
         Uložiť jedlo
       </button>
       <button onclick="closeModal('modal-item')"
               class="px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
                      text-slate-700 dark:text-slate-300
-                     font-bold py-2.5 rounded-xl text-sm transition">
+                     font-bold py-2.5 rounded-2xl text-sm transition">
         Zrušiť
       </button>
     </div>
@@ -791,13 +852,13 @@ $EU_ALLERGENS = [
     <div class="flex gap-2">
       <button id="modal-confirm-slug-ok"
               class="flex-1 bg-red-600 hover:bg-red-700 text-white
-                     font-bold py-2.5 rounded-xl text-sm transition">
+                     font-bold py-2.5 rounded-2xl text-sm transition">
         Potvrdiť zmenu
       </button>
       <button id="modal-confirm-slug-cancel"
               class="px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
                      text-slate-700 dark:text-slate-300
-                     font-bold py-2.5 rounded-xl text-sm transition">
+                     font-bold py-2.5 rounded-2xl text-sm transition">
         Zrušiť
       </button>
     </div>
@@ -836,7 +897,7 @@ $EU_ALLERGENS = [
                     focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
       <button onclick="submitUpdateProfile()"
         class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold
-               rounded-xl transition-all duration-200 active:scale-95">
+               rounded-2xl transition-all duration-200 active:scale-95">
         Uložiť e-mail
       </button>
     </div>
@@ -858,7 +919,7 @@ $EU_ALLERGENS = [
                focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
       <button onclick="submitPasswordChange()"
         class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold
-               rounded-xl transition-all duration-200 active:scale-95">
+               rounded-2xl transition-all duration-200 active:scale-95">
         Zmeniť heslo
       </button>
     </div>
@@ -866,7 +927,7 @@ $EU_ALLERGENS = [
     <!-- Logout -->
     <a href="<?= url('logout') ?>"
        class="block w-full py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold
-              rounded-xl transition-all duration-200 active:scale-95 text-center">
+              rounded-2xl transition-all duration-200 active:scale-95 text-center">
       Odhlásiť sa
     </a>
 
@@ -876,7 +937,7 @@ $EU_ALLERGENS = [
       <button onclick="openModal('modal-delete-account')"
         class="w-full py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30
                text-red-600 dark:text-red-400 text-xs font-semibold
-               rounded-xl transition-all duration-200 border border-red-200 dark:border-red-800/50">
+               rounded-2xl transition-all duration-200 border border-red-200 dark:border-red-800/50">
         Zrušiť môj účet
       </button>
     </div>
@@ -907,12 +968,12 @@ $EU_ALLERGENS = [
     <div class="flex gap-2">
       <button id="da-submit" onclick="submitDeleteAccount()" disabled
         class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold
-               rounded-xl transition-all duration-200 disabled:opacity-40 disabled:pointer-events-none">
+               rounded-2xl transition-all duration-200 disabled:opacity-40 disabled:pointer-events-none">
         Definitívne zmazať všetko
       </button>
       <button onclick="closeModal('modal-delete-account')"
         class="px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
-               text-slate-700 dark:text-slate-300 text-xs font-bold py-2.5 rounded-xl transition">
+               text-slate-700 dark:text-slate-300 text-xs font-bold py-2.5 rounded-2xl transition">
         Zrušiť
       </button>
     </div>
@@ -933,7 +994,7 @@ let menuData = {
   settings:   <?= json_encode($menuSettings,   JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 };
 let currentVenueColor = <?= json_encode($selected ? $selected['color'] : 'black') ?>;
-let previewDark       = <?= json_encode((int)($menuSettings['dark_mode_default'] ?? 0) === 1) ?>;
+let previewDark       = document.documentElement.classList.contains('dark');
 let activeTab         = 'settings';
 
 // ── Network helpers ───────────────────────────────────────────────
@@ -975,7 +1036,7 @@ function setVenueColor(c) {
   currentVenueColor = c;
   document.getElementById('f-color').value = c;
   document.querySelectorAll('.vc-btn').forEach(b => {
-    b.style.borderColor = b.dataset.vc === c ? '#6366f1' : 'transparent';
+    b.style.borderColor = b.dataset.vc === c ? '#6366f1' : '';
   });
   if (/^#[0-9a-fA-F]{6}$/.test(c)) {
     document.getElementById('f-color-picker').value = c;
@@ -987,7 +1048,7 @@ document.querySelectorAll('.vc-btn').forEach(b =>
   b.addEventListener('click', () => setVenueColor(b.dataset.vc))
 );
 document.getElementById('f-color-picker')?.addEventListener('input', function () {
-  document.querySelectorAll('.vc-btn').forEach(b => b.style.borderColor = 'transparent');
+  document.querySelectorAll('.vc-btn').forEach(b => b.style.borderColor = '');
   setVenueColor(this.value);
 });
 
@@ -1108,12 +1169,16 @@ function selectGlobalTheme(type, color) {
     document.getElementById('m-cat-color').value = color;
     menuData.settings.default_category_color = color;
     document.querySelectorAll('.gcat-btn').forEach(b =>
-      b.style.borderColor = b.dataset.gcat === color ? '#6366f1' : '#e2e8f0');
+      b.style.borderColor = b.dataset.gcat === color ? '#6366f1' : '');
+    const cp = document.getElementById('m-cat-custom-color');
+    if (cp && /^#[0-9a-fA-F]{6}$/.test(color)) cp.value = color;
   } else {
     document.getElementById('m-item-color').value = color;
     menuData.settings.default_item_color = color;
     document.querySelectorAll('.gitem-btn').forEach(b =>
-      b.style.borderColor = b.dataset.gitem === color ? '#6366f1' : '#e2e8f0');
+      b.style.borderColor = b.dataset.gitem === color ? '#6366f1' : '');
+    const cp = document.getElementById('m-item-custom-color');
+    if (cp && /^#[0-9a-fA-F]{6}$/.test(color)) cp.value = color;
   }
   updatePreview();
 }
@@ -1126,6 +1191,8 @@ function selectCatTheme(color) {
     b.classList.toggle('ring-indigo-500', match);
     b.classList.toggle('ring-offset-1',   match);
   });
+  const cp = document.getElementById('mc-custom-color');
+  if (cp && /^#[0-9a-fA-F]{6}$/.test(color)) cp.value = color;
 }
 
 function selectItemTheme(color) {
@@ -1136,6 +1203,8 @@ function selectItemTheme(color) {
     b.classList.toggle('ring-indigo-500', match);
     b.classList.toggle('ring-offset-1',   match);
   });
+  const cp = document.getElementById('mi-custom-color');
+  if (cp && /^#[0-9a-fA-F]{6}$/.test(color)) cp.value = color;
 }
 
 // ── Emoji picker ──────────────────────────────────────────────────
@@ -1310,12 +1379,10 @@ async function saveMenuSettings() {
     venue_slug:            CUR_SLUG,
     show_allergens:        document.getElementById('m-show-allergens').checked ? 1 : 0,
     show_featured:         document.getElementById('m-show-featured').checked  ? 1 : 0,
-    dark_mode_default:     document.getElementById('m-dark-default').checked   ? 1 : 0,
     default_category_color: document.getElementById('m-cat-color').value,
     default_item_color:    document.getElementById('m-item-color').value,
   });
   if (data.ok) {
-    previewDark = !!menuData.settings.dark_mode_default;
     updatePreview();
     toast('Nastavenia uložené.', 'success');
   } else {
@@ -1432,7 +1499,7 @@ function openNewVenue() {
   document.getElementById('logo-preview-wrap')?.classList.add('hidden');
   document.getElementById('cover-preview-wrap')?.classList.add('hidden');
   document.getElementById('settings-title').textContent = 'Nová prevádzka';
-  setVenueColor('black');
+  setVenueColor('#111827');
   switchTab('settings');
 }
 
@@ -1475,7 +1542,7 @@ function renderMenuTree() {
     const items = cat.items.map(item => `
       <div data-item-id="${item.id}"
            data-search="${esc(item.name + ' ' + (item.description || ''))}"
-           class="cat-item-row flex items-center gap-2 py-2 border-b border-gray-100 dark:border-slate-700/60 last:border-0${item.is_visible === 0 ? ' opacity-50' : ''}">
+           class="cat-item-row flex items-center gap-2 py-3 px-2 rounded-xl border-b border-gray-100 dark:border-slate-700/60 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors${item.is_visible === 0 ? ' opacity-50' : ''}">
         <span class="drag-item-handle cursor-grab active:cursor-grabbing text-slate-300 dark:text-slate-600 hover:text-slate-400 flex-shrink-0 select-none">${DRAG_SVG}</span>
         <span class="flex-1 text-xs text-slate-700 dark:text-slate-300 truncate font-medium">${esc(item.name)}</span>
         <span class="text-xs font-bold text-slate-400 dark:text-slate-500">${fmtPrice(item.price)}</span>
@@ -1493,8 +1560,8 @@ function renderMenuTree() {
 
     return `
       <div data-cat-id="${cat.id}" data-cat-name="${esc(cat.name)}"
-           class="rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden mb-3${cat.is_visible === 0 ? ' opacity-50' : ''}">
-        <div class="flex items-center gap-2 px-3 py-3" style="background:${catBg}">
+           class="rounded-[2rem] border border-gray-100 dark:border-slate-700 overflow-hidden mb-3${cat.is_visible === 0 ? ' opacity-50' : ''}">
+        <div class="flex items-center gap-2 px-5 py-4" style="background:${catBg}">
           <span class="drag-cat-handle cursor-grab active:cursor-grabbing opacity-50 hover:opacity-90 flex-shrink-0 select-none" style="color:${catTc}">${DRAG_SVG}</span>
           <button type="button" onclick="toggleCat(${cat.id})"
                   class="flex items-center gap-2 flex-1 min-w-0 text-left focus:outline-none"
@@ -1518,12 +1585,12 @@ function renderMenuTree() {
                   title="Zmazať kategóriu">🗑️</button>
         </div>
         <div id="cat-body-${cat.id}" data-open="${isOpen}" class="${isOpen ? '' : 'hidden'}">
-          <div class="sortable-items px-3 pt-1 pb-1 bg-white dark:bg-slate-900" data-cat-id="${cat.id}">
+          <div class="sortable-items px-2 pt-2 pb-1 bg-white dark:bg-slate-900" data-cat-id="${cat.id}">
             ${items}
           </div>
-          <div class="px-3 pb-2 bg-white dark:bg-slate-900">
+          <div class="px-4 pb-3 bg-white dark:bg-slate-900">
             <button onclick="openItemModal(null,${cat.id})"
-                    class="w-full py-2 border border-dashed border-gray-200 dark:border-slate-700 rounded-xl
+                    class="w-full py-2.5 border border-dashed border-gray-200 dark:border-slate-700 rounded-2xl
                            text-xs text-slate-400 dark:text-slate-500
                            hover:text-indigo-600 dark:hover:text-indigo-400
                            hover:border-indigo-300 dark:hover:border-indigo-700 transition">
