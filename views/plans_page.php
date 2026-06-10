@@ -14,6 +14,96 @@ $planRow  = $stUser->fetch() ?: [];
 $userPlan = (string)($planRow['plan_name'] ?: 'free');
 ?>
 
+<style>
+/* ── Premium slider ──────────────────────────────────────────────── */
+.gl-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    #7c3aed var(--fill, 0%),
+    #e5e7eb var(--fill, 0%)
+  );
+  transition: background 0.1s ease;
+}
+.dark .gl-slider {
+  background: linear-gradient(
+    to right,
+    #7c3aed var(--fill, 0%),
+    #334155 var(--fill, 0%)
+  );
+}
+
+/* Webkit thumb — oval pill */
+.gl-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 30px;
+  height: 20px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 2.5px solid #7c3aed;
+  box-shadow: 0 2px 10px rgba(124,58,237,0.30), 0 0 0 0 rgba(124,58,237,0);
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.gl-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+  box-shadow: 0 4px 16px rgba(124,58,237,0.40);
+}
+.gl-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(0.94);
+}
+.dark .gl-slider::-webkit-slider-thumb {
+  background: #1e1b4b;
+  border-color: #a78bfa;
+  box-shadow: 0 2px 10px rgba(167,139,250,0.35);
+}
+
+/* Firefox thumb */
+.gl-slider::-moz-range-thumb {
+  width: 30px;
+  height: 20px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 2.5px solid #7c3aed;
+  box-shadow: 0 2px 10px rgba(124,58,237,0.30);
+  cursor: grab;
+  transition: transform 0.15s ease;
+}
+.gl-slider::-moz-range-thumb:active {
+  cursor: grabbing;
+  transform: scale(0.94);
+}
+.dark .gl-slider::-moz-range-thumb {
+  background: #1e1b4b;
+  border-color: #a78bfa;
+}
+
+/* Step buttons */
+.step-btn {
+  width: 2.5rem; height: 2.5rem;
+  border-radius: 9999px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  user-select: none;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease;
+  background: rgba(124,58,237,0.10);
+  color: #7c3aed;
+  border: none;
+}
+.step-btn:hover  { background: rgba(124,58,237,0.18); }
+.step-btn:active { transform: scale(0.88); }
+.dark .step-btn  { background: rgba(167,139,250,0.12); color: #a78bfa; }
+.dark .step-btn:hover { background: rgba(167,139,250,0.22); }
+</style>
+
 <!-- ── NAVBAR ─────────────────────────────────────────────────────── -->
 <nav class="bg-white/80 dark:bg-slate-950/80 backdrop-blur-lg shadow-sm px-5 py-3
             flex items-center justify-between sticky top-0 z-30
@@ -85,16 +175,19 @@ $userPlan = (string)($planRow['plan_name'] ?: 'free');
       ],
     ];
     foreach ($plans as $plan):
-      $isCurrent  = $userPlan === $plan['id'];
-      $isPopular  = $plan['popular'];
-      $isIndigo   = $plan['color'] === 'indigo';
-      $isEmerald  = $plan['color'] === 'emerald';
+      $isCurrent = $userPlan === $plan['id'];
+      $isIndigo  = $plan['color'] === 'indigo';
+      $isEmerald = $plan['color'] === 'emerald';
     ?>
-    <div class="relative bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm
-                border <?= $isCurrent ? 'border-indigo-400 dark:border-indigo-600' : ($isPopular ? 'border-indigo-200 dark:border-indigo-800/50' : 'border-gray-100 dark:border-slate-800') ?>
-                p-6 flex flex-col transition-all duration-200">
+    <div class="relative bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-6 flex flex-col
+                transition-all duration-200
+                border <?= $isCurrent
+                          ? 'border-indigo-400 dark:border-indigo-600'
+                          : ($plan['popular']
+                            ? 'border-indigo-200 dark:border-indigo-800/50'
+                            : 'border-gray-100 dark:border-slate-800') ?>">
 
-      <?php if ($isPopular): ?>
+      <?php if ($plan['popular']): ?>
       <div class="absolute -top-3 left-1/2 -translate-x-1/2">
         <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-600 text-white shadow-md">
           Najpopulárnejší
@@ -149,7 +242,9 @@ $userPlan = (string)($planRow['plan_name'] ?: 'free');
 
   <!-- ── Custom Plan ──────────────────────────────────────────────── -->
   <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6 md:p-8">
-    <div class="flex items-start justify-between mb-6">
+
+    <!-- Header -->
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-8">
       <div>
         <div class="flex items-center gap-2 mb-1">
           <p class="font-extrabold text-xl text-slate-900 dark:text-white">Custom</p>
@@ -161,57 +256,91 @@ $userPlan = (string)($planRow['plan_name'] ?: 'free');
         <p class="text-sm text-slate-500 dark:text-slate-400">Nastavte si presne to, čo potrebujete.</p>
       </div>
       <div class="text-right">
-        <div class="text-4xl font-extrabold text-violet-600 dark:text-violet-400" id="custom-price">4,92 €</div>
-        <div class="text-xs text-slate-400">mesačne s DPH</div>
+        <div class="text-4xl font-extrabold text-violet-600 dark:text-violet-400 transition-all duration-200" id="custom-price">10,33 €</div>
+        <div class="text-xs text-slate-400 mt-0.5">mesačne s DPH</div>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <!-- Sliders grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8">
 
       <!-- Slider: Prevádzky -->
       <div>
-        <div class="flex justify-between items-center mb-2">
-          <label class="text-xs font-bold text-slate-700 dark:text-slate-300">Prevádzky</label>
-          <span class="text-sm font-extrabold text-violet-600 dark:text-violet-400" id="val-venues">1</span>
+        <div class="flex justify-between items-center mb-3">
+          <label class="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Prevádzky</label>
+          <span class="text-lg font-black text-violet-600 dark:text-violet-400 tabular-nums transition-all duration-150" id="val-venues">1</span>
         </div>
-        <input type="range" id="slider-venues" min="1" max="10" value="1"
-               oninput="updateCustomPrice()"
-               class="w-full h-2 bg-gray-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer
-                      accent-violet-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2
-                      dark:focus:ring-offset-slate-900">
-        <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+        <div class="flex items-center gap-3">
+          <button class="step-btn" onclick="stepSlider('slider-venues',-1)" aria-label="Menej">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14"/>
+            </svg>
+          </button>
+          <div class="flex-1 py-3">
+            <input type="range" id="slider-venues" class="gl-slider w-full" min="1" max="10" value="1"
+                   oninput="updateCustomPrice()">
+          </div>
+          <button class="step-btn" onclick="stepSlider('slider-venues',1)" aria-label="Viac">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-400 mt-1 px-1">
           <span>1</span><span>10</span>
         </div>
       </div>
 
       <!-- Slider: Kategórie -->
       <div>
-        <div class="flex justify-between items-center mb-2">
-          <label class="text-xs font-bold text-slate-700 dark:text-slate-300">Kategórie / prev.</label>
-          <span class="text-sm font-extrabold text-violet-600 dark:text-violet-400" id="val-cats">4</span>
+        <div class="flex justify-between items-center mb-3">
+          <label class="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Kategórie / prev.</label>
+          <span class="text-lg font-black text-violet-600 dark:text-violet-400 tabular-nums transition-all duration-150" id="val-cats">4</span>
         </div>
-        <input type="range" id="slider-cats" min="4" max="50" value="4"
-               oninput="updateCustomPrice()"
-               class="w-full h-2 bg-gray-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer
-                      accent-violet-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2
-                      dark:focus:ring-offset-slate-900">
-        <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+        <div class="flex items-center gap-3">
+          <button class="step-btn" onclick="stepSlider('slider-cats',-1)" aria-label="Menej">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14"/>
+            </svg>
+          </button>
+          <div class="flex-1 py-3">
+            <input type="range" id="slider-cats" class="gl-slider w-full" min="4" max="50" value="4"
+                   oninput="updateCustomPrice()">
+          </div>
+          <button class="step-btn" onclick="stepSlider('slider-cats',1)" aria-label="Viac">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-400 mt-1 px-1">
           <span>4</span><span>50</span>
         </div>
       </div>
 
       <!-- Slider: Jedlá -->
       <div>
-        <div class="flex justify-between items-center mb-2">
-          <label class="text-xs font-bold text-slate-700 dark:text-slate-300">Max jedál / kat.</label>
-          <span class="text-sm font-extrabold text-violet-600 dark:text-violet-400" id="val-items">6</span>
+        <div class="flex justify-between items-center mb-3">
+          <label class="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Max jedál / kat.</label>
+          <span class="text-lg font-black text-violet-600 dark:text-violet-400 tabular-nums transition-all duration-150" id="val-items">6</span>
         </div>
-        <input type="range" id="slider-items" min="6" max="100" value="6"
-               oninput="updateCustomPrice()"
-               class="w-full h-2 bg-gray-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer
-                      accent-violet-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2
-                      dark:focus:ring-offset-slate-900">
-        <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+        <div class="flex items-center gap-3">
+          <button class="step-btn" onclick="stepSlider('slider-items',-1)" aria-label="Menej">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14"/>
+            </svg>
+          </button>
+          <div class="flex-1 py-3">
+            <input type="range" id="slider-items" class="gl-slider w-full" min="6" max="100" value="6"
+                   oninput="updateCustomPrice()">
+          </div>
+          <button class="step-btn" onclick="stepSlider('slider-items',1)" aria-label="Viac">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-400 mt-1 px-1">
           <span>6</span><span>100</span>
         </div>
       </div>
@@ -219,19 +348,31 @@ $userPlan = (string)($planRow['plan_name'] ?: 'free');
 
     <!-- Price breakdown -->
     <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 mb-6">
-      <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Výpočet ceny (bez DPH)</p>
-      <div class="space-y-1 text-xs text-slate-600 dark:text-slate-400">
-        <div class="flex justify-between"><span>Základný poplatok</span><span class="font-semibold">4,00 €</span></div>
-        <div class="flex justify-between"><span id="breakdown-venues">Prevádzky (1 × 1,00 €)</span><span class="font-semibold" id="breakdown-venues-val">1,00 €</span></div>
-        <div class="flex justify-between"><span id="breakdown-cats">Kategórie (4 × 0,10 €)</span><span class="font-semibold" id="breakdown-cats-val">0,40 €</span></div>
-        <div class="flex justify-between"><span id="breakdown-items">Jedlá (6 × 0,05 €)</span><span class="font-semibold" id="breakdown-items-val">0,30 €</span></div>
-        <div class="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-1 mt-1">
-          <span class="font-semibold text-slate-700 dark:text-slate-300">Celkom bez DPH</span>
-          <span class="font-bold text-slate-700 dark:text-slate-300" id="breakdown-subtotal">5,70 €</span>
+      <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">Výpočet ceny (bez DPH)</p>
+      <div class="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+        <div class="flex justify-between">
+          <span>Základná réžia</span>
+          <span class="font-semibold text-slate-700 dark:text-slate-300">5,00 €</span>
         </div>
-        <div class="flex justify-between text-emerald-600 dark:text-emerald-400">
+        <div class="flex justify-between">
+          <span id="breakdown-venues">Prevádzky (1 × 2,00 €)</span>
+          <span class="font-semibold text-slate-700 dark:text-slate-300" id="breakdown-venues-val">2,00 €</span>
+        </div>
+        <div class="flex justify-between">
+          <span id="breakdown-cats">Kategórie (4 × 0,20 €)</span>
+          <span class="font-semibold text-slate-700 dark:text-slate-300" id="breakdown-cats-val">0,80 €</span>
+        </div>
+        <div class="flex justify-between">
+          <span id="breakdown-items">Jedlá (6 × 0,10 €)</span>
+          <span class="font-semibold text-slate-700 dark:text-slate-300" id="breakdown-items-val">0,60 €</span>
+        </div>
+        <div class="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-2 mt-1">
+          <span class="font-semibold text-slate-700 dark:text-slate-300">Celkom bez DPH</span>
+          <span class="font-bold text-slate-800 dark:text-slate-200" id="breakdown-subtotal">8,40 €</span>
+        </div>
+        <div class="flex justify-between text-violet-600 dark:text-violet-400 font-medium">
           <span>DPH 23 %</span>
-          <span id="breakdown-vat">1,31 €</span>
+          <span id="breakdown-vat">1,93 €</span>
         </div>
       </div>
     </div>
@@ -265,37 +406,63 @@ function selectPlan(planId) {
   toast('Kontaktujte nás na info@gastrolink.sk pre aktiváciu plánu.', 'info');
 }
 
-// ── Custom price calculator ────────────────────────────────────────
+// ── Slider fill ───────────────────────────────────────────────────
+function updateFill(el) {
+  const min = parseFloat(el.min);
+  const max = parseFloat(el.max);
+  const val = parseFloat(el.value);
+  const pct = ((val - min) / (max - min)) * 100;
+  el.style.setProperty('--fill', pct.toFixed(2) + '%');
+}
+
+// ── Step buttons ──────────────────────────────────────────────────
+function stepSlider(id, delta) {
+  const el = document.getElementById(id);
+  el.value = Math.min(parseInt(el.max), Math.max(parseInt(el.min), parseInt(el.value) + delta));
+  updateCustomPrice();
+}
+
+// ── Format number ─────────────────────────────────────────────────
 function fmt(n) {
   return n.toFixed(2).replace('.', ',') + ' €';
 }
 
+// ── Custom price calculator ───────────────────────────────────────
+// Coefficients (bez DPH): base=5€, venue=2€, cat=0.20€, item=0.10€; DPH=23%
 function updateCustomPrice() {
-  const venues = parseInt(document.getElementById('slider-venues').value);
-  const cats   = parseInt(document.getElementById('slider-cats').value);
-  const items  = parseInt(document.getElementById('slider-items').value);
+  const sV = document.getElementById('slider-venues');
+  const sC = document.getElementById('slider-cats');
+  const sI = document.getElementById('slider-items');
+
+  updateFill(sV);
+  updateFill(sC);
+  updateFill(sI);
+
+  const venues = parseInt(sV.value);
+  const cats   = parseInt(sC.value);
+  const items  = parseInt(sI.value);
 
   document.getElementById('val-venues').textContent = venues;
   document.getElementById('val-cats').textContent   = cats;
   document.getElementById('val-items').textContent  = items;
 
-  const venueCost = venues * 1.00;
-  const catCost   = cats   * 0.10;
-  const itemCost  = items  * 0.05;
-  const base      = 4.00;
+  const venueCost = venues * 2.00;
+  const catCost   = cats   * 0.20;
+  const itemCost  = items  * 0.10;
+  const base      = 5.00;
   const subtotal  = base + venueCost + catCost + itemCost;
   const vat       = subtotal * 0.23;
   const total     = subtotal * 1.23;
 
-  document.getElementById('custom-price').textContent = fmt(total);
-  document.getElementById('breakdown-venues').textContent      = `Prevádzky (${venues} × 1,00 €)`;
-  document.getElementById('breakdown-venues-val').textContent  = fmt(venueCost);
-  document.getElementById('breakdown-cats').textContent        = `Kategórie (${cats} × 0,10 €)`;
-  document.getElementById('breakdown-cats-val').textContent    = fmt(catCost);
-  document.getElementById('breakdown-items').textContent       = `Jedlá (${items} × 0,05 €)`;
-  document.getElementById('breakdown-items-val').textContent   = fmt(itemCost);
-  document.getElementById('breakdown-subtotal').textContent    = fmt(subtotal);
-  document.getElementById('breakdown-vat').textContent         = fmt(vat);
+  document.getElementById('custom-price').textContent         = fmt(total);
+  document.getElementById('breakdown-venues').textContent     = `Prevádzky (${venues} × 2,00 €)`;
+  document.getElementById('breakdown-venues-val').textContent = fmt(venueCost);
+  document.getElementById('breakdown-cats').textContent       = `Kategórie (${cats} × 0,20 €)`;
+  document.getElementById('breakdown-cats-val').textContent   = fmt(catCost);
+  document.getElementById('breakdown-items').textContent      = `Jedlá (${items} × 0,10 €)`;
+  document.getElementById('breakdown-items-val').textContent  = fmt(itemCost);
+  document.getElementById('breakdown-subtotal').textContent   = fmt(subtotal);
+  document.getElementById('breakdown-vat').textContent        = fmt(vat);
 }
 
 // Init
