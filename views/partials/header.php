@@ -20,5 +20,19 @@ if (!str_contains($_pt, 'GastroLink QR')) $_pt .= ' | GastroLink QR';
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
+<style>
+*{-webkit-tap-highlight-color:transparent}
+body{overscroll-behavior-y:none}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:9999px}
+::-webkit-scrollbar-thumb:hover{background:#94a3b8}
+html.dark ::-webkit-scrollbar-thumb{background:#334155}
+html.dark ::-webkit-scrollbar-thumb:hover{background:#475569}
+*{scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}
+html.dark *{scrollbar-color:#334155 transparent}
+.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+.no-scrollbar::-webkit-scrollbar{display:none}
+</style>
 <?php if (!empty($extraHead)) echo $extraHead; ?>
 </head>

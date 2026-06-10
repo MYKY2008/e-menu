@@ -1,7 +1,6 @@
 <?php
 $title     = 'Admin — GastroLink QR';
 $robots    = 'noindex, nofollow';
-$extraHead = '<style>*{-webkit-tap-highlight-color:transparent}</style>';
 require __DIR__ . '/partials/header.php';
 ?>
 <body class="bg-gray-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 transition-colors duration-200">
@@ -62,6 +61,16 @@ $flash = getFlash();
                    hover:bg-gray-200 dark:hover:bg-slate-700
                    transition-all duration-200">
       <span id="dark-icon" class="w-3.5 h-3.5 block pointer-events-none"></span>
+    </button>
+    <button id="profile-toggle" onclick="document.getElementById('modal-profile').classList.remove('hidden')" aria-label="Profil"
+            class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800
+                   flex items-center justify-center
+                   text-slate-500 dark:text-slate-400
+                   hover:bg-gray-200 dark:hover:bg-slate-700
+                   transition-all duration-200">
+      <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="8" r="4"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 20c0-4 3.582-7 8-7s8 3 8 7"/>
+      </svg>
     </button>
     <a href="<?= url('logout') ?>"
        class="text-xs font-medium text-slate-500 dark:text-slate-400
@@ -340,6 +349,121 @@ $flash = getFlash();
   </div>
 </div>
 
+<!-- ══ MODAL: Profile ════════════════════════════════════════════════ -->
+<div id="modal-profile"
+     class="hidden fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-6 w-full max-w-sm max-h-[92vh] overflow-y-auto border border-gray-100 dark:border-slate-800">
+    <div class="flex items-center justify-between mb-1">
+      <h3 class="font-bold text-lg text-slate-900 dark:text-white">Môj profil</h3>
+      <button onclick="document.getElementById('modal-profile').classList.add('hidden')"
+              class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center
+                     text-slate-500 hover:bg-gray-200 dark:hover:bg-slate-700 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <p id="profile-email-display" class="text-xs text-slate-500 dark:text-slate-400 mb-5 break-all">
+      <?= e($_SESSION['username']) ?>
+    </p>
+
+    <!-- Email change -->
+    <div class="mb-5 space-y-2">
+      <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">Zmena e-mailu</p>
+      <input id="up-email" type="email" placeholder="Nový e-mail"
+             value="<?= e($_SESSION['username']) ?>"
+             class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+                    text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                    focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+      <input id="up-current-password" type="password" placeholder="Aktuálne heslo" autocomplete="current-password"
+             class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+                    text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                    focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+      <button onclick="submitUpdateProfile()"
+        class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold
+               rounded-xl transition-all duration-200 active:scale-95">
+        Uložiť e-mail
+      </button>
+    </div>
+
+    <!-- Password change -->
+    <div class="mb-5 space-y-2">
+      <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">Zmena hesla</p>
+      <input id="cp-old" type="password" placeholder="Aktuálne heslo" autocomplete="current-password"
+        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+               focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+      <input id="cp-new" type="password" placeholder="Nové heslo (min. 8)" autocomplete="new-password"
+        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+               focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+      <input id="cp-new2" type="password" placeholder="Zopakovať nové heslo" autocomplete="new-password"
+        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+               focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+      <button onclick="submitPasswordChange()"
+        class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold
+               rounded-xl transition-all duration-200 active:scale-95">
+        Zmeniť heslo
+      </button>
+    </div>
+
+    <!-- Logout -->
+    <a href="<?= url('logout') ?>"
+       class="block w-full py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold
+              rounded-xl transition-all duration-200 active:scale-95 text-center">
+      Odhlásiť sa
+    </a>
+
+    <!-- Account deletion -->
+    <div class="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+      <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">Zrušenie účtu</p>
+      <button onclick="document.getElementById('modal-delete-account').classList.remove('hidden')"
+        class="w-full py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30
+               text-red-600 dark:text-red-400 text-xs font-semibold
+               rounded-xl transition-all duration-200 border border-red-200 dark:border-red-800/50">
+        Zrušiť môj účet
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Delete Account ════════════════════════════════════════ -->
+<div id="modal-delete-account"
+     class="hidden fixed inset-0 bg-black/60 dark:bg-black/70 z-[60] flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-6 w-full max-w-sm border border-gray-100 dark:border-slate-800">
+    <h3 class="font-bold text-lg mb-3 text-red-600 dark:text-red-400">⚠️ Zmazať účet</h3>
+    <p class="text-xs text-slate-600 dark:text-slate-400 mb-5 leading-relaxed">
+      <strong class="text-slate-800 dark:text-slate-200">VAROVANIE: Táto akcia je nevratná.</strong>
+      Všetky vaše prevádzky, jedálne lístky a nahrané fotografie budú okamžite zmazané.
+    </p>
+    <div class="space-y-2 mb-4">
+      <input id="da-password" type="password" placeholder="Vaše aktuálne heslo"
+        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+               focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200"
+        oninput="checkDeleteReady()">
+      <input id="da-confirm" type="text" placeholder="Napíšte: ano chcem odstranit ucet"
+        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
+               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+               focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200"
+        oninput="checkDeleteReady()">
+    </div>
+    <div class="flex gap-2">
+      <button id="da-submit" onclick="submitDeleteAccount()" disabled
+        class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold
+               rounded-xl transition-all duration-200 disabled:opacity-40 disabled:pointer-events-none">
+        Definitívne zmazať všetko
+      </button>
+      <button onclick="document.getElementById('modal-delete-account').classList.add('hidden')"
+        class="px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
+               text-slate-700 dark:text-slate-300 text-xs font-bold py-2.5 rounded-xl transition">
+        Zrušiť
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 const CSRF    = <?= json_encode(csrfToken()) ?>;
 const API_URL = <?= json_encode(url('api/admin_actions.php')) ?>;
@@ -469,6 +593,83 @@ document.getElementById('cu-modal').addEventListener('click', function(e) {
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+async function submitUpdateProfile() {
+  const email   = (document.getElementById('up-email')?.value || '').trim();
+  const current = document.getElementById('up-current-password')?.value || '';
+  if (!email || !current) { toast('Vyplňte e-mail aj aktuálne heslo.', 'error'); return; }
+  try {
+    const res = await fetchWithTimeout(<?= json_encode(url('api/update_profile.php')) ?>, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, email, current_password: current })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast('E-mail bol úspešne zmenený.', 'success');
+      document.getElementById('profile-email-display').textContent = email;
+      document.getElementById('up-current-password').value = '';
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+
+function checkDeleteReady() {
+  const pw   = document.getElementById('da-password')?.value || '';
+  const conf = document.getElementById('da-confirm')?.value || '';
+  const btn  = document.getElementById('da-submit');
+  if (btn) btn.disabled = !(pw && conf === 'ano chcem odstranit ucet');
+}
+
+async function submitDeleteAccount() {
+  const password     = document.getElementById('da-password')?.value || '';
+  const confirmation = document.getElementById('da-confirm')?.value || '';
+  try {
+    const res = await fetchWithTimeout(<?= json_encode(url('api/delete_account.php')) ?>, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, current_password: password, confirmation_text: confirmation })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      window.location.href = <?= json_encode(url('login')) ?>;
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+
+document.getElementById('modal-delete-account').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.add('hidden');
+});
+
+async function submitPasswordChange() {
+  const oldPw  = document.getElementById('cp-old').value;
+  const newPw  = document.getElementById('cp-new').value;
+  const newPw2 = document.getElementById('cp-new2').value;
+  if (!oldPw || !newPw || !newPw2) { toast('Vyplňte všetky polia.', 'error'); return; }
+  try {
+    const res = await fetchWithTimeout(<?= json_encode(url('api/change_password.php')) ?>, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, old_password: oldPw, new_password: newPw, new_password2: newPw2 })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast('Heslo bolo úspešne zmenené.', 'success');
+      document.getElementById('cp-old').value  = '';
+      document.getElementById('cp-new').value  = '';
+      document.getElementById('cp-new2').value = '';
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+
+document.getElementById('modal-profile').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.add('hidden');
+});
 
 function toast(msg, type = 'info') {
   const el = document.createElement('div');

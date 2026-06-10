@@ -1,40 +1,36 @@
-# PROMPT: Drag & Drop jedál medzi kategóriami
+# PROMPT: Zjednotenie štýlu Scrollbarov (Visual Polish)
 
-**CIEĽ:** Umožniť používateľovi v administrácii presúvať jedlá z jednej kategórie do druhej pomocou myši (drag & drop).
+**CIEĽ:** Nahradiť systémové scrollbary za vlastné, minimalistické a zaoblené, ktoré ladia s dizajnom v `docs/dizajn.md`.
 
 ---
 
-### 🛠️ ÚLOHA 1: Prepojenie SortableJS skupín
-**Súbor:** `views/dashboard.php` (funkcia `initSortable`)
+### 🛠️ ÚLOHA 1: Globálny CSS štýl pre Scrollbary
+**Súbor:** `views/partials/header.php`
 
 **Inštrukcie:**
-1. Pri inicializácii `.sortable-items` pridaj vlastnosť `group: 'shared-items'`.
-2. To isté meno skupiny zabezpečí, že knižnica dovolí presun položky medzi rôznymi kontajnermi `.sortable-items`.
-3. Uprav `onEnd` udalosť pre položky:
-   - Zisti ID kategórie, do ktorej bolo jedlo pustené (z `evt.to.dataset.catId`).
-   - Odošli toto `catId` v AJAX požiadavke na backend spolu so zoznamom ID jedál v novom poradí.
-   - Po úspešnom uložení aktualizuj lokálny stav `menuData.categories`, aby sa zmena prejavila aj v živom náhľade.
+1.  Pridaj do hlavičky blok `<style>`, ktorý bude obsahovať globálne pravidlá pre scrollbary.
+2.  **Štýl:**
+    - **Šírka:** Úzka (cca 5px - 6px), aby nezavadzala.
+    - **Thumb (bežec):** Výrazne zaoblený (`rounded-full` štýl), farba `slate-300` v Light móde a `slate-700` v Dark móde.
+    - **Track (dráha):** Transparentná (minimalizmus, aby "nešpatila" čisté biele/tmavé plochy).
+    - **Hover:** Pri prejdení myšou sa farba thumbu mierne zvýrazní (napr. `slate-400` / `slate-600`).
+3.  **Konzistencia:** Presuň sem aj definíciu triedy `.no-scrollbar`, aby bola dostupná globálne na všetkých stránkach.
 
 ---
 
-### 🛠️ ÚLOHA 2: Rozšírenie API pre zmenu kategórie
-**Súbor:** `api/manage_menu.php` (akcia `reorder`)
+### 🛠️ ÚLOHA 2: Čistenie duplicitných štýlov
+**Súbory:** `views/dashboard.php`, `views/admin.php`
 
 **Inštrukcie:**
-1. Uprav vetvu `if ($type === 'items')`.
-2. API musí prijímať voliteľný parameter `target_category_id`.
-3. Ak je `target_category_id` zadané:
-   - Over, či táto kategória patrí aktuálnemu používateľovi (rovnaká logika ako v `getCategory`).
-   - V SQL dotaze vnútri cyklu neaktualizuj len `sort_order`, ale aj `category_id = :cat_id`.
-   - `UPDATE items SET sort_order = :so, category_id = :cat_id WHERE id = :id`
-4. Zabezpeč, aby sa po presune správne zavolala funkcia `touchVenue($slug)`, aby sa klientom vymazala cache.
+1.  Odstráň lokálne `<style>` bloky, ktoré definujú `-webkit-tap-highlight-color` alebo `.no-scrollbar`.
+2.  Tieto pravidlá budú teraz centrálne spravované v `header.php`.
 
 ---
 
-### 🛠️ ÚLOHA 3: UX a Vizuálna spätná väzba
+### 🛠️ ÚLOHA 3: UX vylepšenie (Overscroll)
 **Inštrukcie:**
-1. Počas ťahania pridaj položke jemnú polopriehľadnosť (v SortableJS cez `ghostClass: 'opacity-40'`).
-2. Ak presun zlyhá (napr. chyba siete), vráť položku na pôvodné miesto alebo refreshni zoznam z `menuData`.
+1.  Pridaj do globálneho štýlu pravidlo pre `body`, ktoré zabráni "odrážaniu" (bounce effect) pri scrolovaní na vrchu a spodku stránky (najmä na mobiloch), aby web pôsobil ako natívna aplikácia.
+    - `overscroll-behavior-y: none;`
 
 ---
-**VÝSTUP:** Upravené súbory `views/dashboard.php` (sekcia JavaScript) a `api/manage_menu.php`.
+**VÝSTUP:** Upravené súbory `views/partials/header.php`, `views/dashboard.php` a `views/admin.php`.
