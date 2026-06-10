@@ -352,16 +352,35 @@ try {
                 $db->commit();
                 $touchVenue($slug);
             } else {
+                $targetCatId = isset($payload['target_category_id'])
+                    ? (int)$payload['target_category_id'] : null;
+
                 $firstItem = $getItem($ids[0]);
                 $catRow    = $db->prepare("SELECT venue_slug FROM categories WHERE id = ?");
                 $catRow->execute([$firstItem['category_id']]);
                 $slug = (string)$catRow->fetchColumn();
 
+                if ($targetCatId !== null) {
+                    $getCategory($targetCatId);
+                    $tRow = $db->prepare("SELECT venue_slug FROM categories WHERE id = ?");
+                    $tRow->execute([$targetCatId]);
+                    $slug = (string)$tRow->fetchColumn();
+                }
+
                 $db->beginTransaction();
-                $st = $db->prepare(
-                    "UPDATE items SET sort_order = ? WHERE id = ? AND category_id = ?"
-                );
-                foreach ($ids as $i => $id) { $st->execute([$i, $id, $firstItem['category_id']]); }
+                if ($targetCatId !== null) {
+                    $st = $db->prepare(
+                        "UPDATE items SET sort_order = :so, category_id = :cat_id WHERE id = :id"
+                    );
+                    foreach ($ids as $i => $id) {
+                        $st->execute([':so' => $i, ':cat_id' => $targetCatId, ':id' => $id]);
+                    }
+                } else {
+                    $st = $db->prepare(
+                        "UPDATE items SET sort_order = ? WHERE id = ? AND category_id = ?"
+                    );
+                    foreach ($ids as $i => $id) { $st->execute([$i, $id, $firstItem['category_id']]); }
+                }
                 $db->commit();
                 $touchVenue($slug);
             }

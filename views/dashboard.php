@@ -1458,26 +1458,47 @@ function initSortable() {
       handle: '.drag-item-handle',
       animation: 150,
       ghostClass: 'opacity-40',
-      onEnd() {
-        const catId  = parseInt(container.dataset.catId);
-        const newIds = [...container.querySelectorAll(':scope > [data-item-id]')]
+      group: 'shared-items',
+      onEnd(evt) {
+        const fromCatId = parseInt(evt.from.dataset.catId);
+        const toCatId   = parseInt(evt.to.dataset.catId);
+        const movedId   = parseInt(evt.item.dataset.itemId);
+        const newToIds  = [...evt.to.querySelectorAll(':scope > [data-item-id]')]
           .map(el => parseInt(el.dataset.itemId));
-        const cat = menuData.categories.find(c => c.id === catId);
-        if (cat) {
-          const itemMap = Object.fromEntries(cat.items.map(i => [i.id, i]));
-          cat.items = newIds.map(id => itemMap[id]).filter(Boolean);
+
+        const snapshot = JSON.parse(JSON.stringify(menuData.categories));
+        const fromCat  = menuData.categories.find(c => c.id === fromCatId);
+        const toCat    = menuData.categories.find(c => c.id === toCatId);
+
+        if (fromCatId !== toCatId && fromCat && toCat) {
+          const movedItem = fromCat.items.find(i => i.id === movedId);
+          if (movedItem) {
+            fromCat.items = fromCat.items.filter(i => i.id !== movedId);
+            const toMap = Object.fromEntries(toCat.items.map(i => [i.id, i]));
+            toCat.items = newToIds.map(id =>
+              id === movedId ? { ...movedItem, category_id: toCatId } : toMap[id]
+            ).filter(Boolean);
+          }
+          reorderApi('items', newToIds, null, toCatId, snapshot);
+        } else if (toCat) {
+          const itemMap = Object.fromEntries(toCat.items.map(i => [i.id, i]));
+          toCat.items = newToIds.map(id => itemMap[id]).filter(Boolean);
+          reorderApi('items', newToIds, null, null, snapshot);
         }
-        reorderApi('items', newIds, null);
       },
     });
   });
 }
 
-async function reorderApi(type, ids, venueSlug) {
+async function reorderApi(type, ids, venueSlug, targetCatId = null, snapshot = null) {
   const payload = { csrf: CSRF, action: 'reorder', type, ids };
   if (venueSlug) payload.venue_slug = venueSlug;
+  if (targetCatId) payload.target_category_id = targetCatId;
   const data = await menuApi(payload);
-  if (!data.ok) toast(data.error || 'Chyba pri ukladaní poradia.', 'error');
+  if (!data.ok) {
+    toast(data.error || 'Chyba pri ukladaní poradia.', 'error');
+    if (snapshot) { menuData.categories = snapshot; renderMenuTree(); }
+  }
 }
 
 // ── Accordion toggle ──────────────────────────────────────────────
