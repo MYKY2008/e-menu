@@ -29,12 +29,15 @@ try {
     $role   = (string)($_SESSION['user_role'] ?? 'user');
     $action = (string)($payload['action'] ?? '');
 
-    // Load user plan for limit enforcement (admins bypass all limits)
-    $userPlan = 'free';
+    // Load user limits (admins bypass all limits)
+    $maxCats     = PHP_INT_MAX;
+    $maxItemsCat = PHP_INT_MAX;
     if ($role !== 'admin') {
-        $planSt = $db->prepare("SELECT plan FROM users WHERE id = ?");
+        $planSt = $db->prepare("SELECT max_categories, max_items_per_cat FROM users WHERE id = ?");
         $planSt->execute([$userId]);
-        $userPlan = (string)($planSt->fetchColumn() ?: 'free');
+        $planRow     = $planSt->fetch() ?: [];
+        $maxCats     = max(1, (int)($planRow['max_categories']    ?: 3));
+        $maxItemsCat = max(1, (int)($planRow['max_items_per_cat'] ?: 5));
     }
 
     // ── Ownership helpers ─────────────────────────────────────
@@ -140,11 +143,11 @@ try {
             if (mb_strlen($name) > 100) throw new InvalidArgumentException('Názov kategórie je príliš dlhý (max 100 znakov).');
             $verifyVenue($slug);
 
-            if ($userPlan === 'free') {
+            if ($role !== 'admin') {
                 $cntSt = $db->prepare("SELECT COUNT(*) FROM categories WHERE venue_slug = ?");
                 $cntSt->execute([$slug]);
-                if ((int)$cntSt->fetchColumn() >= 3) {
-                    throw new InvalidArgumentException('Dosiahli ste limit 3 kategórií pre Free plán. Prejdite na Paid pre neobmedzený počet.');
+                if ((int)$cntSt->fetchColumn() >= $maxCats) {
+                    throw new InvalidArgumentException("Dosiahli ste limit {$maxCats} kategórií pre váš plán.");
                 }
             }
 
@@ -265,11 +268,11 @@ try {
                 if ($catId < 1) throw new InvalidArgumentException('Chýba ID kategórie.');
                 $cat = $getCategory($catId);
 
-                if ($userPlan === 'free') {
+                if ($role !== 'admin') {
                     $itemCntSt = $db->prepare("SELECT COUNT(*) FROM items WHERE category_id = ?");
                     $itemCntSt->execute([$catId]);
-                    if ((int)$itemCntSt->fetchColumn() >= 5) {
-                        throw new InvalidArgumentException('Dosiahli ste limit 5 jedál na kategóriu pre Free plán.');
+                    if ((int)$itemCntSt->fetchColumn() >= $maxItemsCat) {
+                        throw new InvalidArgumentException("Dosiahli ste limit {$maxItemsCat} jedál na kategóriu pre váš plán.");
                     }
                 }
 

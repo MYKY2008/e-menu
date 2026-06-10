@@ -136,7 +136,7 @@ try {
 
     // ── Venue limit check for new venues (non-admin users) ────
     if ($isNew && $role !== 'admin') {
-        $userRow = $db->prepare("SELECT venue_limit FROM users WHERE id = ?");
+        $userRow = $db->prepare("SELECT max_venues FROM users WHERE id = ?");
         $userRow->execute([$userId]);
         $limit = (int)($userRow->fetchColumn() ?? 1);
 

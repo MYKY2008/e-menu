@@ -67,14 +67,18 @@ function getDB(): PDO {
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS users (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            username     TEXT    UNIQUE NOT NULL,
-            password     TEXT    NOT NULL,
-            role         TEXT    NOT NULL DEFAULT 'user',
-            venue_limit  INTEGER NOT NULL DEFAULT 1,
-            is_verified  INTEGER NOT NULL DEFAULT 0,
-            verify_token TEXT    DEFAULT NULL,
-            created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            username          TEXT    UNIQUE NOT NULL,
+            password          TEXT    NOT NULL,
+            role              TEXT    NOT NULL DEFAULT 'user',
+            venue_limit       INTEGER NOT NULL DEFAULT 1,
+            plan_name         TEXT    NOT NULL DEFAULT 'free',
+            max_venues        INTEGER NOT NULL DEFAULT 1,
+            max_categories    INTEGER NOT NULL DEFAULT 3,
+            max_items_per_cat INTEGER NOT NULL DEFAULT 5,
+            is_verified       INTEGER NOT NULL DEFAULT 0,
+            verify_token      TEXT    DEFAULT NULL,
+            created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         )
     ");
     $pdo->exec("
@@ -109,6 +113,12 @@ function getDB(): PDO {
         "ALTER TABLE categories ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE items      ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE users      ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'",
+        "ALTER TABLE users      ADD COLUMN plan_name TEXT NOT NULL DEFAULT 'free'",
+        "ALTER TABLE users      ADD COLUMN max_venues INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE users      ADD COLUMN max_categories INTEGER NOT NULL DEFAULT 3",
+        "ALTER TABLE users      ADD COLUMN max_items_per_cat INTEGER NOT NULL DEFAULT 5",
+        "UPDATE users SET max_venues = venue_limit WHERE venue_limit > 1 AND max_venues = 1",
+        "UPDATE users SET plan_name = 'pro', max_categories = 10, max_items_per_cat = 25 WHERE plan = 'paid' AND plan_name = 'free'",
     ];
     foreach ($migrations as $sql) {
         try { $pdo->exec($sql); } catch (PDOException $ignored) {}

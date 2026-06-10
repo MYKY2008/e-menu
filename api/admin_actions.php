@@ -27,13 +27,12 @@ try {
 
     switch ($action) {
 
-        // ── Update venue_limit ────────────────────────────────
+        // ── Update max_venues (legacy alias) ──────────────────
         case 'update_limit': {
             $uid   = (int)($payload['user_id']     ?? 0);
-            $limit = (int)($payload['venue_limit'] ?? 1);
+            $limit = max(0, min(9999, (int)($payload['venue_limit'] ?? 1)));
             if ($uid < 1) throw new InvalidArgumentException('Neplatné ID.');
-            if ($limit < 0 || $limit > 9999) throw new InvalidArgumentException('Neplatný limit.');
-            $db->prepare("UPDATE users SET venue_limit = ? WHERE id = ?")->execute([$limit, $uid]);
+            $db->prepare("UPDATE users SET max_venues = ?, venue_limit = ? WHERE id = ?")->execute([$limit, $limit, $uid]);
             ob_end_clean();
             echo json_encode(['ok' => true]);
             exit;
@@ -109,9 +108,9 @@ try {
             $hash = password_hash($pass, PASSWORD_BCRYPT, ['cost' => 12]);
             try {
                 $db->prepare(
-                    "INSERT INTO users (username, password, role, venue_limit, is_verified)
-                     VALUES (?, ?, ?, ?, 1)"
-                )->execute([$email, $hash, $role, $limit]);
+                    "INSERT INTO users (username, password, role, venue_limit, max_venues, is_verified)
+                     VALUES (?, ?, ?, ?, ?, 1)"
+                )->execute([$email, $hash, $role, $limit, $limit]);
             } catch (PDOException $ex) {
                 if (str_contains($ex->getMessage(), 'UNIQUE')) {
                     throw new InvalidArgumentException("E-mail \"$email\" je už zaregistrovaný.");
@@ -124,12 +123,18 @@ try {
             exit;
         }
 
-        // ── Update plan ───────────────────────────────────────
+        // ── Update plan & limits ──────────────────────────────
         case 'update_plan': {
-            $uid  = (int)($payload['user_id'] ?? 0);
-            $plan = in_array($payload['plan'] ?? '', ['free', 'paid'], true) ? $payload['plan'] : 'free';
+            $uid      = (int)($payload['user_id'] ?? 0);
+            $planName = in_array($payload['plan_name'] ?? '', ['free','pro','ultra','custom'], true)
+                        ? $payload['plan_name'] : 'free';
+            $maxV = max(0, min(9999, (int)($payload['max_venues']        ?? 1)));
+            $maxC = max(0, min(9999, (int)($payload['max_categories']    ?? 3)));
+            $maxI = max(0, min(9999, (int)($payload['max_items_per_cat'] ?? 5)));
             if ($uid < 1) throw new InvalidArgumentException('Neplatné ID.');
-            $db->prepare("UPDATE users SET plan = ? WHERE id = ?")->execute([$plan, $uid]);
+            $db->prepare(
+                "UPDATE users SET plan_name = ?, max_venues = ?, max_categories = ?, max_items_per_cat = ?, venue_limit = ? WHERE id = ?"
+            )->execute([$planName, $maxV, $maxC, $maxI, $maxV, $uid]);
             ob_end_clean();
             echo json_encode(['ok' => true]);
             exit;

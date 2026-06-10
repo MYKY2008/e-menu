@@ -119,6 +119,16 @@ switch (true) {
         require BASE_DIR . '/views/admin.php';
         break;
 
+    case $path === '/profile':
+        requireLogin();
+        require BASE_DIR . '/views/profile_page.php';
+        break;
+
+    case $path === '/plans':
+        requireLogin();
+        require BASE_DIR . '/views/plans_page.php';
+        break;
+
     // Clean URL  /r/{slug}
     case (bool) preg_match('~^/r/([a-z0-9_-]+)$~i', $path, $m):
         $routeSlug = sanitizeSlug($m[1]);

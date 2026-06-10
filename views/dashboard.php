@@ -16,12 +16,21 @@ $stVenues = $db->prepare("SELECT * FROM venues WHERE user_id = ? ORDER BY create
 $stVenues->execute([$userId]);
 $venues = $stVenues->fetchAll();
 
-$stLimit = $db->prepare("SELECT venue_limit, plan FROM users WHERE id = ?");
+$stLimit = $db->prepare("SELECT max_venues, plan_name, max_categories, max_items_per_cat FROM users WHERE id = ?");
 $stLimit->execute([$userId]);
-$stLimitRow = $stLimit->fetch() ?: [];
-$venueLimit = (int)($stLimitRow['venue_limit'] ?? 1);
-$userPlan   = $role === 'admin' ? 'paid' : (string)($stLimitRow['plan'] ?? 'free');
-$venueCount = count($venues);
+$stLimitRow  = $stLimit->fetch() ?: [];
+$venueLimit  = $role === 'admin' ? 9999 : (int)($stLimitRow['max_venues']        ?? 1);
+$userPlan    = $role === 'admin' ? 'admin' : (string)($stLimitRow['plan_name']   ?? 'free');
+$maxCats     = $role === 'admin' ? 9999 : (int)($stLimitRow['max_categories']    ?? 3);
+$maxItemsCat = $role === 'admin' ? 9999 : (int)($stLimitRow['max_items_per_cat'] ?? 5);
+$venueCount  = count($venues);
+$planLabel   = match($userPlan) {
+    'pro'    => 'Pro',
+    'ultra'  => 'Ultra',
+    'custom' => 'Custom',
+    'admin'  => 'Admin',
+    default  => 'Free',
+};
 
 $selected = null;
 if (!empty($venues)) {
@@ -92,7 +101,6 @@ $EU_ALLERGENS = [
     <span class="text-indigo-600">GastroLink</span><span class="text-emerald-500">QR</span>
   </a>
   <div class="flex items-center gap-3">
-    <span class="text-slate-400 text-xs hidden sm:inline"><?= e($_SESSION['username']) ?></span>
     <?php if ($role === 'admin'): ?>
     <a href="<?= url('admin') ?>"
        class="text-xs font-semibold px-3 py-1.5 rounded-xl
@@ -110,19 +118,15 @@ $EU_ALLERGENS = [
                    transition-all duration-200">
       <span id="dark-icon" class="w-3.5 h-3.5 block pointer-events-none"></span>
     </button>
-    <button id="profile-toggle" onclick="openModal('modal-profile')" aria-label="Profil"
-            class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800
-                   flex items-center justify-center
-                   text-slate-500 dark:text-slate-400
-                   hover:bg-gray-200 dark:hover:bg-slate-700
-                   transition-all duration-200">
-      <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <a href="<?= url('profile') ?>" id="profile-toggle" aria-label="Profil"
+       class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800
+              flex items-center justify-center
+              text-slate-500 dark:text-slate-400
+              hover:bg-gray-200 dark:hover:bg-slate-700
+              transition-all duration-200">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <circle cx="12" cy="8" r="4"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 20c0-4 3.582-7 8-7s8 3 8 7"/>
       </svg>
-    </button>
-    <a href="<?= url('logout') ?>"
-       class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-      Odhlásiť
     </a>
   </div>
 </nav>
@@ -149,8 +153,8 @@ $EU_ALLERGENS = [
           <span class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest">Prevádzky</span>
           <?php if ($role !== 'admin'): ?>
           <span class="px-2 py-0.5 rounded-full text-[10px] font-bold
-                       <?= $userPlan === 'paid' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-gray-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' ?>">
-            <?= $userPlan === 'paid' ? 'Paid' : 'Free' ?>
+                       <?= $userPlan === 'free' ? 'bg-gray-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' ?>">
+            <?= e($planLabel) ?>
           </span>
           <?php endif; ?>
         </div>
@@ -536,14 +540,14 @@ $EU_ALLERGENS = [
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
         <div class="flex items-center justify-between mb-4">
           <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Kategórie a jedlá</p>
-          <?php $catLimitReached = $userPlan === 'free' && count($menuCategories) >= 3; ?>
+          <?php $catLimitReached = $userPlan !== 'admin' && count($menuCategories) >= $maxCats; ?>
           <button id="btn-add-cat" onclick="openCatModal(null)"
-                  <?= $catLimitReached ? 'title="Dosiahnutý limit 3 kategórií (Free plán)"' : '' ?>
+                  <?= $catLimitReached ? "title=\"Dosiahnutý limit {$maxCats} kategórií\"" : '' ?>
                   class="px-4 py-2 rounded-2xl transition text-xs font-bold
                          <?= $catLimitReached
                              ? 'bg-gray-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 opacity-60'
                              : 'bg-emerald-600 hover:bg-emerald-700 text-white' ?>">
-            <?= $catLimitReached ? '🔒 Limit (Free)' : '+ Kategória' ?>
+            <?= $catLimitReached ? '🔒 Limit' : '+ Kategória' ?>
           </button>
         </div>
         <!-- Live search -->
@@ -879,121 +883,6 @@ $EU_ALLERGENS = [
   </div>
 </div>
 
-<!-- ══ MODAL: Profile ════════════════════════════════════════════════ -->
-<div id="modal-profile"
-     class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-6 w-full max-w-sm max-h-[92vh] overflow-y-auto border border-gray-100 dark:border-slate-800">
-    <div class="flex items-center justify-between mb-1">
-      <h3 class="font-bold text-lg text-slate-900 dark:text-white">Môj profil</h3>
-      <button onclick="closeModal('modal-profile')"
-              class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center
-                     text-slate-500 hover:bg-gray-200 dark:hover:bg-slate-700 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-    <p id="profile-email-display" class="text-xs text-slate-500 dark:text-slate-400 mb-5 break-all">
-      <?= e($_SESSION['username']) ?>
-    </p>
-
-    <!-- Email change -->
-    <div class="mb-5 space-y-2">
-      <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">Zmena e-mailu</p>
-      <input id="up-email" type="email" placeholder="Nový e-mail"
-             value="<?= e($_SESSION['username']) ?>"
-             class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
-                    text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
-                    focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
-      <input id="up-current-password" type="password" placeholder="Aktuálne heslo" autocomplete="current-password"
-             class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
-                    text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
-                    focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
-      <button onclick="submitUpdateProfile()"
-        class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold
-               rounded-2xl transition-all duration-200 active:scale-95">
-        Uložiť e-mail
-      </button>
-    </div>
-
-    <!-- Password change -->
-    <div class="mb-5 space-y-2">
-      <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">Zmena hesla</p>
-      <input id="cp-old" type="password" placeholder="Aktuálne heslo" autocomplete="current-password"
-        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
-               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
-               focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
-      <input id="cp-new" type="password" placeholder="Nové heslo (min. 8)" autocomplete="new-password"
-        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
-               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
-               focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
-      <input id="cp-new2" type="password" placeholder="Zopakovať nové heslo" autocomplete="new-password"
-        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
-               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
-               focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
-      <button onclick="submitPasswordChange()"
-        class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold
-               rounded-2xl transition-all duration-200 active:scale-95">
-        Zmeniť heslo
-      </button>
-    </div>
-
-    <!-- Logout -->
-    <a href="<?= url('logout') ?>"
-       class="block w-full py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold
-              rounded-2xl transition-all duration-200 active:scale-95 text-center">
-      Odhlásiť sa
-    </a>
-
-    <!-- Account deletion -->
-    <div class="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
-      <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">Zrušenie účtu</p>
-      <button onclick="openModal('modal-delete-account')"
-        class="w-full py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30
-               text-red-600 dark:text-red-400 text-xs font-semibold
-               rounded-2xl transition-all duration-200 border border-red-200 dark:border-red-800/50">
-        Zrušiť môj účet
-      </button>
-    </div>
-  </div>
-</div>
-
-<!-- ══ MODAL: Delete Account ════════════════════════════════════════ -->
-<div id="modal-delete-account"
-     class="hidden fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-6 w-full max-w-sm border border-gray-100 dark:border-slate-800">
-    <h3 class="font-bold text-lg mb-3 text-red-600 dark:text-red-400">⚠️ Zmazať účet</h3>
-    <p class="text-xs text-slate-600 dark:text-slate-400 mb-5 leading-relaxed">
-      <strong class="text-slate-800 dark:text-slate-200">VAROVANIE: Táto akcia je nevratná.</strong>
-      Všetky vaše prevádzky, jedálne lístky a nahrané fotografie budú okamžite zmazané.
-    </p>
-    <div class="space-y-2 mb-4">
-      <input id="da-password" type="password" placeholder="Vaše aktuálne heslo"
-        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
-               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
-               focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200"
-        oninput="checkDeleteReady()">
-      <input id="da-confirm" type="text" placeholder="Napíšte: ano chcem odstranit ucet"
-        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2.5 text-xs
-               text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
-               focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200"
-        oninput="checkDeleteReady()">
-    </div>
-    <div class="flex gap-2">
-      <button id="da-submit" onclick="submitDeleteAccount()" disabled
-        class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold
-               rounded-2xl transition-all duration-200 disabled:opacity-40 disabled:pointer-events-none">
-        Definitívne zmazať všetko
-      </button>
-      <button onclick="closeModal('modal-delete-account')"
-        class="px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
-               text-slate-700 dark:text-slate-300 text-xs font-bold py-2.5 rounded-2xl transition">
-        Zrušiť
-      </button>
-    </div>
-  </div>
-</div>
-
 <script>
 // ── Constants & state ─────────────────────────────────────────────
 const CSRF    = <?= json_encode(csrfToken()) ?>;
@@ -1002,7 +891,9 @@ const BASE_URL= <?= json_encode(rtrim(baseUrl(), '/')) ?>;
 const CUR_SLUG= <?= json_encode($selected ? $selected['slug'] : '') ?>;
 const PAL     = <?= json_encode(getPalette()) ?>;
 const GASTRO    = <?= json_encode($GASTRO_THEMES) ?>;   // [{bg, name}, ...]
-const USER_PLAN = <?= json_encode($userPlan) ?>;
+const USER_PLAN     = <?= json_encode($userPlan) ?>;
+const MAX_CATS      = <?= json_encode($maxCats) ?>;
+const MAX_ITEMS_CAT = <?= json_encode($maxItemsCat) ?>;
 
 let menuData = {
   categories: <?= json_encode($menuCategories, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1240,7 +1131,7 @@ function selectEmoji(emoji) {
 function openModal(id)  { document.getElementById(id)?.classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
 
-const MODAL_IDS = ['modal-cat', 'modal-item', 'modal-confirm-slug', 'modal-profile', 'modal-delete-account'];
+const MODAL_IDS = ['modal-cat', 'modal-item', 'modal-confirm-slug'];
 MODAL_IDS.forEach(id => {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1255,8 +1146,8 @@ document.addEventListener('keydown', e => {
 
 // ── Category modal ────────────────────────────────────────────────
 function openCatModal(catId) {
-  if (catId === null && USER_PLAN === 'free' && menuData.categories.length >= 3) {
-    toast('Dosiahli ste limit 3 kategórií pre Free plán. Prejdite na Paid pre neobmedzený počet.', 'error');
+  if (catId === null && USER_PLAN !== 'admin' && menuData.categories.length >= MAX_CATS) {
+    toast(`Dosiahli ste limit ${MAX_CATS} kategórií pre váš plán.`, 'error');
     return;
   }
   document.getElementById('mc-id').value = catId ?? '';
@@ -1314,10 +1205,10 @@ async function deleteCatData(id, name) {
 
 // ── Item modal ────────────────────────────────────────────────────
 function openItemModal(itemId, catId) {
-  if (itemId === null && USER_PLAN === 'free') {
+  if (itemId === null && USER_PLAN !== 'admin') {
     const _cat = menuData.categories.find(c => c.id === catId);
-    if (_cat && _cat.items.length >= 5) {
-      toast('Dosiahli ste limit 5 jedál na kategóriu pre Free plán.', 'error');
+    if (_cat && _cat.items.length >= MAX_ITEMS_CAT) {
+      toast(`Dosiahli ste limit ${MAX_ITEMS_CAT} jedál na kategóriu pre váš plán.`, 'error');
       return;
     }
   }
@@ -1447,10 +1338,10 @@ function applyMenuData(data) {
 
 function updateCatLimitBtn() {
   const btn = document.getElementById('btn-add-cat');
-  if (!btn || USER_PLAN !== 'free') return;
-  const reached   = menuData.categories.length >= 3;
-  btn.title       = reached ? 'Dosiahnutý limit 3 kategórií (Free plán)' : '';
-  btn.textContent = reached ? '🔒 Limit (Free)' : '+ Kategória';
+  if (!btn || USER_PLAN === 'admin') return;
+  const reached   = menuData.categories.length >= MAX_CATS;
+  btn.title       = reached ? `Dosiahnutý limit ${MAX_CATS} kategórií` : '';
+  btn.textContent = reached ? '🔒 Limit' : '+ Kategória';
   btn.className   = reached
     ? 'px-4 py-2 rounded-2xl transition text-xs font-bold bg-gray-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 opacity-60'
     : 'px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl transition';
@@ -1582,7 +1473,7 @@ function renderMenuTree() {
     // First render: only first open. Re-renders: preserve state (new cats default open).
     const isOpen           = openStates[cat.id] !== undefined ? openStates[cat.id] : (firstRender ? idx === 0 : true);
     const cvRot            = isOpen ? ' rotate-180' : '';
-    const itemLimitReached = USER_PLAN === 'free' && cat.items.length >= 5;
+    const itemLimitReached = USER_PLAN !== 'admin' && cat.items.length >= MAX_ITEMS_CAT;
     const CHEVRON = `<svg class="cat-chevron w-3 h-3 flex-shrink-0 transition-transform duration-200${cvRot}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
 
     const items = cat.items.map(item => `
@@ -1937,76 +1828,6 @@ function toast(msg, type = 'info') {
   el.textContent = msg;
   document.getElementById('toast-wrap').appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3200);
-}
-
-// ── Password change ───────────────────────────────────────────────
-async function submitPasswordChange() {
-  const oldPw = document.getElementById('cp-old').value;
-  const newPw = document.getElementById('cp-new').value;
-  const newPw2 = document.getElementById('cp-new2').value;
-  if (!oldPw || !newPw || !newPw2) { toast('Vyplňte všetky polia.', 'error'); return; }
-  try {
-    const res = await fetchWithTimeout(<?= json_encode(url('api/change_password.php')) ?>, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csrf: CSRF, old_password: oldPw, new_password: newPw, new_password2: newPw2 })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      toast('Heslo bolo úspešne zmenené.', 'success');
-      document.getElementById('cp-old').value  = '';
-      document.getElementById('cp-new').value  = '';
-      document.getElementById('cp-new2').value = '';
-    } else {
-      toast(data.error || 'Chyba.', 'error');
-    }
-  } catch { toast('Sieťová chyba.', 'error'); }
-}
-
-async function submitUpdateProfile() {
-  const email   = (document.getElementById('up-email')?.value || '').trim();
-  const current = document.getElementById('up-current-password')?.value || '';
-  if (!email || !current) { toast('Vyplňte e-mail aj aktuálne heslo.', 'error'); return; }
-  try {
-    const res = await fetchWithTimeout(<?= json_encode(url('api/update_profile.php')) ?>, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csrf: CSRF, email, current_password: current })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      toast('E-mail bol úspešne zmenený.', 'success');
-      document.getElementById('profile-email-display').textContent = email;
-      document.getElementById('up-current-password').value = '';
-    } else {
-      toast(data.error || 'Chyba.', 'error');
-    }
-  } catch { toast('Sieťová chyba.', 'error'); }
-}
-
-function checkDeleteReady() {
-  const pw   = document.getElementById('da-password')?.value || '';
-  const conf = document.getElementById('da-confirm')?.value || '';
-  const btn  = document.getElementById('da-submit');
-  if (btn) btn.disabled = !(pw && conf === 'ano chcem odstranit ucet');
-}
-
-async function submitDeleteAccount() {
-  const password     = document.getElementById('da-password')?.value || '';
-  const confirmation = document.getElementById('da-confirm')?.value || '';
-  try {
-    const res = await fetchWithTimeout(<?= json_encode(url('api/delete_account.php')) ?>, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csrf: CSRF, current_password: password, confirmation_text: confirmation })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      window.location.href = <?= json_encode(url('login')) ?>;
-    } else {
-      toast(data.error || 'Chyba.', 'error');
-    }
-  } catch { toast('Sieťová chyba.', 'error'); }
 }
 
 // ── Init ──────────────────────────────────────────────────────────

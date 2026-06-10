@@ -1,0 +1,439 @@
+<?php
+$title  = 'Môj Profil — GastroLink QR';
+$robots = 'noindex, nofollow';
+require __DIR__ . '/partials/header.php';
+?>
+<body class="bg-gray-50 dark:bg-slate-950 min-h-screen transition-colors duration-200">
+
+<?php
+$db     = getDB();
+$userId = (int)$_SESSION['user_id'];
+$email  = (string)($_SESSION['username'] ?? '');
+
+// Load user plan
+$stUser = $db->prepare("SELECT plan_name, max_categories, max_items_per_cat FROM users WHERE id = ?");
+$stUser->execute([$userId]);
+$planRow     = $stUser->fetch() ?: [];
+$userPlan    = (string)($planRow['plan_name']        ?: 'free');
+$maxCats     = (int)($planRow['max_categories']       ?: 3);
+$maxItemsCat = (int)($planRow['max_items_per_cat']    ?: 5);
+$planLabel   = match($userPlan) {
+    'pro'    => 'Pro',
+    'ultra'  => 'Ultra',
+    'custom' => 'Custom',
+    default  => 'Free',
+};
+
+// Load venue stats for plan section
+$stVenueStats = $db->prepare("
+    SELECT v.slug, v.name, COUNT(c.id) AS cat_count
+    FROM venues v
+    LEFT JOIN categories c ON c.venue_slug = v.slug
+    WHERE v.user_id = ?
+    GROUP BY v.slug, v.name
+    ORDER BY v.name
+");
+$stVenueStats->execute([$userId]);
+$venueStats = $stVenueStats->fetchAll();
+
+$tabs = [
+    ['id' => 'account',  'title' => 'Môj Účet',        'desc'  => 'Zmena e-mailu'],
+    ['id' => 'security', 'title' => 'Zabezpečenie',     'desc'  => 'Zmena hesla'],
+    ['id' => 'plan',     'title' => 'Môj Plán',         'desc'  => 'Free / Paid limity'],
+    ['id' => 'danger',   'title' => 'Nebezpečná zóna',  'desc'  => 'Zmazanie účtu'],
+];
+?>
+
+<!-- ── NAVBAR ─────────────────────────────────────────────────────────── -->
+<nav class="bg-white/80 dark:bg-slate-950/80 backdrop-blur-lg shadow-sm px-5 py-3
+            flex items-center justify-between sticky top-0 z-30
+            border-b border-gray-100 dark:border-slate-800">
+  <a href="<?= url() ?>" class="font-extrabold text-sm tracking-tight">
+    <span class="text-indigo-600">GastroLink</span><span class="text-emerald-500">QR</span>
+  </a>
+  <div class="flex items-center gap-3">
+    <a href="<?= url('dashboard') ?>"
+       class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl
+              text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Dashboard
+    </a>
+    <button id="dark-toggle" onclick="toggleDark()" aria-label="Prepnúť tmavý režim"
+            class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-800
+                   flex items-center justify-center text-slate-500 dark:text-slate-400
+                   hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-200">
+      <span id="dark-icon" class="w-3.5 h-3.5 block pointer-events-none"></span>
+    </button>
+  </div>
+</nav>
+
+<!-- Toast -->
+<div id="toast-wrap" class="fixed top-14 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- ── MAIN ───────────────────────────────────────────────────────────── -->
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <div class="flex flex-col md:flex-row gap-6 items-start">
+
+    <!-- SIDEBAR -->
+    <aside class="w-full md:w-64 flex-shrink-0">
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-3 flex flex-col">
+        <!-- User info -->
+        <div class="px-3 pt-2 pb-4 border-b border-gray-100 dark:border-slate-800 mb-2">
+          <div class="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center mb-2">
+            <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="8" r="4"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 20c0-4 3.582-7 8-7s8 3 8 7"/>
+            </svg>
+          </div>
+          <p class="font-extrabold text-slate-900 dark:text-white text-sm">Nastavenia účtu</p>
+          <p class="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5"><?= e($email) ?></p>
+          <span class="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-bold
+                       <?= $userPlan === 'free' ? 'bg-gray-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' ?>">
+            <?= e($planLabel) ?>
+          </span>
+        </div>
+
+        <!-- Tabs -->
+        <nav class="flex-1 space-y-0.5 mb-2">
+          <?php foreach ($tabs as $i => $tab): ?>
+          <button onclick="switchTab('<?= $tab['id'] ?>')"
+                  id="tab-btn-<?= $tab['id'] ?>"
+                  data-danger="<?= $tab['id'] === 'danger' ? '1' : '0' ?>"
+                  class="w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200
+                         <?= $i === 0 ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-50 dark:hover:bg-slate-800' ?>">
+            <p class="font-bold text-sm
+                      <?= $tab['id'] === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300' ?>
+                      <?= $i === 0 ? 'text-indigo-700 dark:text-indigo-300' : '' ?>">
+              <?= $tab['title'] ?>
+            </p>
+            <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5"><?= $tab['desc'] ?></p>
+          </button>
+          <?php endforeach; ?>
+        </nav>
+
+        <!-- Logout -->
+        <div class="pt-3 border-t border-gray-100 dark:border-slate-800">
+          <a href="<?= url('logout') ?>"
+             class="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl
+                    bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30
+                    text-red-600 dark:text-red-400 text-sm font-bold transition">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1"/>
+            </svg>
+            Odhlásiť sa
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CONTENT -->
+    <div class="flex-1 min-w-0">
+
+      <!-- ── Môj Účet ─────────────────────────────────────────────────── -->
+      <div id="tab-account" class="space-y-4">
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">Zmena e-mailu</p>
+          <div class="space-y-3 max-w-md">
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">E-mail</label>
+              <input id="up-email" type="email" value="<?= e($email) ?>"
+                     class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                            text-slate-900 dark:text-slate-100
+                            focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Aktuálne heslo (potvrdenie)</label>
+              <input id="up-current-password" type="password" placeholder="Vaše aktuálne heslo" autocomplete="current-password"
+                     class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                            text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                            focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+            </div>
+            <button onclick="submitUpdateProfile()"
+              class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold
+                     rounded-2xl transition-all duration-200 active:scale-95">
+              Uložiť e-mail
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Zabezpečenie ──────────────────────────────────────────────── -->
+      <div id="tab-security" class="space-y-4 hidden">
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">Zmena hesla</p>
+          <div class="space-y-3 max-w-md">
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Aktuálne heslo</label>
+              <input id="cp-old" type="password" placeholder="Aktuálne heslo" autocomplete="current-password"
+                class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                       text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                       focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Nové heslo</label>
+              <input id="cp-new" type="password" placeholder="Min. 8 znakov" autocomplete="new-password"
+                class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                       text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                       focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Zopakovať nové heslo</label>
+              <input id="cp-new2" type="password" placeholder="Zopakovať nové heslo" autocomplete="new-password"
+                class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                       text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                       focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+            </div>
+            <button onclick="submitPasswordChange()"
+              class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold
+                     rounded-2xl transition-all duration-200 active:scale-95">
+              Zmeniť heslo
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Môj Plán ──────────────────────────────────────────────────── -->
+      <div id="tab-plan" class="space-y-4 hidden">
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">Aktuálny plán</p>
+
+          <div class="flex items-center gap-3 mb-6">
+            <span class="text-3xl font-extrabold text-slate-900 dark:text-white">
+              <?= e($planLabel) ?>
+            </span>
+            <span class="px-3 py-1 rounded-full text-xs font-bold
+                         <?= $userPlan === 'free' ? 'bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' ?>">
+              <?= $userPlan === 'free' ? 'Základný' : 'Aktívny' ?>
+            </span>
+          </div>
+
+          <div class="mb-5 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
+            <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Limity plánu</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Max. kategórie</p>
+                <p class="text-lg font-bold text-slate-900 dark:text-white"><?= $maxCats >= 9999 ? '∞' : $maxCats ?></p>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Max. jedál / kat.</p>
+                <p class="text-lg font-bold text-slate-900 dark:text-white"><?= $maxItemsCat >= 9999 ? '∞' : $maxItemsCat ?></p>
+              </div>
+            </div>
+          </div>
+
+          <a href="<?= url('plans') ?>"
+             class="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700
+                    text-white text-sm font-bold rounded-2xl transition-all duration-200 active:scale-95 mb-5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z"/>
+            </svg>
+            Zmeniť plán
+          </a>
+
+          <?php if ($userPlan === 'free'): ?>
+          <div class="space-y-4">
+            <?php if (!empty($venueStats)): ?>
+            <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Využitie kategórií</p>
+            <?php foreach ($venueStats as $vs):
+              $catCount = (int)$vs['cat_count'];
+              $pct      = min(100, (int)round($catCount / 3 * 100));
+              $over     = $catCount >= 3;
+            ?>
+            <div class="bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4">
+              <div class="flex justify-between items-center mb-2">
+                <p class="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">📍 <?= e($vs['name']) ?></p>
+                <span class="text-xs font-bold ml-3 flex-shrink-0 <?= $over ? 'text-red-500' : 'text-slate-600 dark:text-slate-400' ?>">
+                  <?= $catCount ?>/3
+                </span>
+              </div>
+              <div class="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
+                <div class="h-1.5 rounded-full transition-all <?= $over ? 'bg-red-500' : 'bg-indigo-500' ?>"
+                     style="width:<?= $pct ?>%"></div>
+              </div>
+            </div>
+            <?php endforeach; ?>
+            <?php else: ?>
+            <p class="text-xs text-slate-400 dark:text-slate-500">Zatiaľ nemáte žiadne prevádzky.</p>
+            <?php endif; ?>
+
+            <div class="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/50">
+              <p class="text-xs font-bold text-indigo-700 dark:text-indigo-300 mb-2">Limity Free plánu</p>
+              <ul class="text-xs text-indigo-600 dark:text-indigo-400 space-y-1">
+                <li>• Max. <strong>3 kategórie</strong> na prevádzku</li>
+                <li>• Max. <strong>5 jedál</strong> na kategóriu</li>
+              </ul>
+            </div>
+          </div>
+
+          <?php else: ?>
+          <div class="space-y-4">
+            <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+              Váš <strong class="text-slate-900 dark:text-white"><?= e($planLabel) ?></strong> plán zahŕňa
+              <strong class="text-slate-900 dark:text-white"><?= $maxCats >= 9999 ? 'neobmedzený' : $maxCats ?></strong> kategórií
+              a <strong class="text-slate-900 dark:text-white"><?= $maxItemsCat >= 9999 ? 'neobmedzený' : $maxItemsCat ?></strong> jedál na kategóriu.
+            </p>
+            <?php if (!empty($venueStats)): ?>
+            <div class="bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4">
+              <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">Prevádzky</p>
+              <?php foreach ($venueStats as $vs): ?>
+              <div class="flex justify-between items-center py-2 border-b border-gray-100 dark:border-slate-700 last:border-0">
+                <span class="text-xs text-slate-700 dark:text-slate-300 truncate"><?= e($vs['name']) ?></span>
+                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-3 flex-shrink-0">
+                  <?= (int)$vs['cat_count'] ?> kat.
+                </span>
+              </div>
+              <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+          </div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <!-- ── Nebezpečná zóna ───────────────────────────────────────────── -->
+      <div id="tab-danger" class="space-y-4 hidden">
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-red-100 dark:border-red-900/30 p-6">
+          <p class="text-[10px] font-black uppercase tracking-wider text-red-400 mb-5">⚠️ Nebezpečná zóna</p>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+            <strong class="text-slate-800 dark:text-slate-200">VAROVANIE: Táto akcia je nevratná.</strong>
+            Všetky vaše prevádzky, jedálne lístky a nahrané fotografie budú okamžite a natrvalo zmazané.
+          </p>
+          <div class="space-y-3 max-w-md">
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Aktuálne heslo</label>
+              <input id="da-password" type="password" placeholder="Vaše aktuálne heslo"
+                class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                       text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                       focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200"
+                oninput="checkDeleteReady()">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Potvrďte zmazanie</label>
+              <input id="da-confirm" type="text" placeholder="Napíšte: ano chcem odstranit ucet"
+                class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                       text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                       focus:outline-none focus:ring-2 focus:ring-red-500 transition-all duration-200"
+                oninput="checkDeleteReady()">
+            </div>
+            <button id="da-submit" onclick="submitDeleteAccount()" disabled
+              class="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold
+                     rounded-2xl transition-all duration-200 active:scale-95
+                     disabled:opacity-40 disabled:pointer-events-none">
+              Definitívne zmazať môj účet
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div>
+</div>
+
+<script>
+const CSRF = <?= json_encode(csrfToken()) ?>;
+
+// ── Tab switching ──────────────────────────────────────────────────
+const TAB_IDS = ['account', 'security', 'plan', 'danger'];
+function switchTab(id) {
+  TAB_IDS.forEach(t => {
+    document.getElementById('tab-' + t)?.classList.toggle('hidden', t !== id);
+    const btn = document.getElementById('tab-btn-' + t);
+    if (!btn) return;
+    const active = t === id;
+    const danger = btn.dataset.danger === '1';
+    const base   = 'w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200';
+    btn.className = `${base} ${active
+      ? (danger ? 'bg-red-50 dark:bg-red-900/20' : 'bg-indigo-50 dark:bg-indigo-900/30')
+      : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`;
+  });
+}
+
+// ── Network helpers ────────────────────────────────────────────────
+function fetchWithTimeout(url, options, ms = 10000) {
+  const ctrl = new AbortController();
+  const id   = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(id));
+}
+
+// ── Toast ──────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `pointer-events-auto px-4 py-2.5 rounded-2xl text-white text-sm font-semibold
+    shadow-xl transition-all
+    ${type==='success' ? 'bg-emerald-600' : type==='error' ? 'bg-red-600' : 'bg-slate-800'}`;
+  el.textContent = msg;
+  document.getElementById('toast-wrap').appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3200);
+}
+
+// ── E-mail ─────────────────────────────────────────────────────────
+async function submitUpdateProfile() {
+  const email   = (document.getElementById('up-email')?.value || '').trim();
+  const current = document.getElementById('up-current-password')?.value || '';
+  if (!email || !current) { toast('Vyplňte e-mail aj aktuálne heslo.', 'error'); return; }
+  try {
+    const res = await fetchWithTimeout(<?= json_encode(url('api/update_profile.php')) ?>, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, email, current_password: current })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast('E-mail bol úspešne zmenený.', 'success');
+      document.getElementById('up-current-password').value = '';
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+
+// ── Heslo ──────────────────────────────────────────────────────────
+async function submitPasswordChange() {
+  const oldPw  = document.getElementById('cp-old').value;
+  const newPw  = document.getElementById('cp-new').value;
+  const newPw2 = document.getElementById('cp-new2').value;
+  if (!oldPw || !newPw || !newPw2) { toast('Vyplňte všetky polia.', 'error'); return; }
+  try {
+    const res = await fetchWithTimeout(<?= json_encode(url('api/change_password.php')) ?>, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, old_password: oldPw, new_password: newPw, new_password2: newPw2 })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast('Heslo bolo úspešne zmenené.', 'success');
+      ['cp-old','cp-new','cp-new2'].forEach(id => { document.getElementById(id).value = ''; });
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+
+// ── Zmazanie účtu ──────────────────────────────────────────────────
+function checkDeleteReady() {
+  const pw   = document.getElementById('da-password')?.value || '';
+  const conf = document.getElementById('da-confirm')?.value || '';
+  const btn  = document.getElementById('da-submit');
+  if (btn) btn.disabled = !(pw && conf === 'ano chcem odstranit ucet');
+}
+
+async function submitDeleteAccount() {
+  const password     = document.getElementById('da-password')?.value || '';
+  const confirmation = document.getElementById('da-confirm')?.value || '';
+  try {
+    const res = await fetchWithTimeout(<?= json_encode(url('api/delete_account.php')) ?>, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, current_password: password, confirmation_text: confirmation })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      window.location.href = <?= json_encode(url('login')) ?>;
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+
+// Init
+switchTab('account');
+</script>
+<?php require __DIR__ . '/partials/footer.php'; ?>

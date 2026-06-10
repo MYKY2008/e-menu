@@ -1,50 +1,39 @@
-# PROMPT: Implementácia plánov (Free vs. Paid) a limitov pre menu
+# PROMPT: Fix ceny Custom plánu a prémiový redizajn sliderov
 
-**CIEĽ:** Zaviesť systém plánov pre používateľov. Používatelia s plánom "free" budú mať obmedzený počet kategórií (max 3) a jedál (max 5 na kategóriu). Administrátor bude môcť v admin paneli vidieť a meniť plán používateľa.
+**CIEĽ:** Opraviť cenovú logiku Custom plánu a vytvoriť vysoko kvalitné, vizuálne atraktívne ovládanie pomocou sliderov s oválnym úchopom.
 
 ---
 
-### 🛠️ ÚLOHA 1: Databázová migrácia
-**Súbor:** `config.php`
+### 🛠️ ÚLOHA 1: Nová cenotvorba pre Custom plán
+**Súbor:** `views/plans_page.php` (funkcia `updateCustomPrice`)
+**Problém:** Custom konfigurácia identická s Ultra plánom vychádza momentálne lacnejšie.
+**Riešenie:** Nastav nové koeficienty (ceny bez DPH):
+- **Základná mesačná réžia:** 5.00 €
+- **Každá prevádzka:** 2.00 €
+- **Každá kategória (limit):** 0.20 €
+- **Každé jedlo (limit na kat.):** 0.10 €
+- **DPH:** Ponechaj 23 %.
+
+*Vysvetlenie:* Pri konfigurácii 1 prevádzka / 20 kat. / 50 jedál bude cena (5+2+4+5) * 1.23 = **19.68 €**. To je správne – fixný Ultra balík za 15 € je výhodnejší pre užívateľa, zatiaľ čo Custom je prémiová voľba pre tých, ktorí chcú presnú kontrolu.
+
+---
+
+### 🛠️ ÚLOHA 2: Redizajn Sliderov (UX & UI)
+**Súbor:** `views/plans_page.php`
 **Inštrukcie:**
-1. Do tabuľky `users` pridaj stĺpec `plan TEXT NOT NULL DEFAULT 'free'`.
-2. Pridaj príslušný `ALTER TABLE` príkaz do poľa `$migrations`.
+1. **Oválne úchopy (Pill handle):** Prestaň používať natívny vzhľad sliderov. Pomocou CSS (napr. cez Tailwind triedy `[&::-webkit-slider-thumb]`, `[&::-moz-range-thumb]`) nastylovo úchop slidera ako **biely zaoblený ovál / pilulku** so stredovým tieňom a jemným borderom.
+2. **Track (Dráha):** Dráha slidera musí byť hrubšia, zaoblená a mať farebný gradient alebo výraznú farbu (`violet-500`), ktorá sa mení podľa pozície úchopu (tzv. "fill" efekt).
+3. **+/- Tlačidlá:** Po stranách každého slidera pridaj kruhové tlačidlá s ikonami mínus a plus pre presné krokovanie. Tieto tlačidlá musia:
+   - Mať dostatočnú veľkosť na dotyk (min. `w-10 h-10`).
+   - Mať vizuálnu odozvu pri kliknutí (`active:scale-90`).
+   - Okamžite spustiť prepočet ceny.
+4. **Zobrazenie hodnoty:** Číslo aktuálne vybratej hodnoty nad sliderom urob väčšie a výraznejšie (napr. `text-lg font-black text-violet-600`).
 
 ---
 
-### 🛠️ ÚLOHA 2: Administrátorské rozhranie (Admin Panel)
-**Súbor:** `views/admin.php`
-**Inštrukcie:**
-1. V tabuľke používateľov pridaj stĺpec "Plán".
-2. Zobraz aktuálny plán (Free/Paid) pomocou farebného odznaku (Pill).
-   - Free: `bg-gray-100 text-slate-600`
-   - Paid: `bg-emerald-100 text-emerald-700` (alebo indigo)
-3. Umožni administrátorovi zmeniť plán používateľa (napr. cez jednoduchý select v riadku tabuľky, ktorý okamžite po zmene zavolá API).
-4. V `api/admin_actions.php` implementuj akciu `update_plan`.
+### 🛠️ ÚLOHA 3: Responzivita a Polish
+1. Skontroluj, aby na mobile boli slidery a tlačidlá vedľa seba (ak je dostatok miesta) alebo v logickom stacku pod sebou, aby sa dali ľahko ovládať palcom.
+2. Pridaj plynulé prechody (`transition`) pri zmenách farieb a stavov.
 
 ---
-
-### 🛠️ ÚLOHA 3: Vynucovanie limitov na Backende
-**Súbor:** `api/manage_menu.php`
-**Inštrukcie:**
-1. Pri pridávaní kategórie (`add_category`) over, či má používateľ plán `free`. Ak áno, skontroluj, či už nemá 3 kategórie. Ak má, vráť chybu: "Dosiahli ste limit 3 kategórií pre Free plán. Prejdite na Paid pre neobmedzený počet."
-2. Pri pridávaní jedla (`add_item`) over, či má používateľ plán `free`. Ak áno, skontroluj, či daná kategória už nemá 5 jedál. Ak má, vráť chybu: "Dosiahli ste limit 5 jedál na kategóriu pre Free plán."
-3. Potrebuješ načítať `plan` používateľa z tabuľky `users` (pripoj k dotazu v `verifyVenue` alebo načítaj samostatne).
-
----
-
-### 🛠️ ÚLOHA 4: Spätná väzba v Dashboarde
-**Súbor:** `views/dashboard.php`
-**Inštrukcie:**
-1. Do dashboardu pridaj informáciu o aktuálnom pláne (napr. v sidebare alebo pri názve prevádzky).
-2. Ak je používateľ Free a dosiahol limit kategórií, tlačidlo "+ Kategória" by malo byť vizuálne odlišné (napr. disabled s tooltipom alebo po kliknutí zobraziť toast s vysvetlením).
-3. Podobne ošetri tlačidlo "+ Pridať jedlo" v rámci kategórie, ak je dosiahnutý limit 5 jedál.
-
----
-
-### 🎨 Dizajnové pravidlá:
-- Zachovaj minimalistický vizuál.
-- Toast správy pre chyby limitov by mali byť jasné a motivovať k upgradeu.
-
----
-**VÝSTUP:** Upravené súbory `config.php`, `views/admin.php`, `api/admin_actions.php`, `api/manage_menu.php` a `views/dashboard.php`.
+**VÝSTUP:** Upravený súbor `views/plans_page.php`.
