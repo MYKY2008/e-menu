@@ -8,10 +8,12 @@ require __DIR__ . '/partials/header.php';
 <?php
 $db       = getDB();
 $userId   = (int)$_SESSION['user_id'];
-$stUser   = $db->prepare("SELECT plan_name, max_venues, max_categories, max_items_per_cat FROM users WHERE id = ?");
+$stUser   = $db->prepare("SELECT plan_name, max_venues, max_categories, max_items_per_cat, plan_ends_at, next_plan_name FROM users WHERE id = ?");
 $stUser->execute([$userId]);
-$planRow  = $stUser->fetch() ?: [];
-$userPlan = (string)($planRow['plan_name'] ?: 'free');
+$planRow      = $stUser->fetch() ?: [];
+$userPlan     = (string)($planRow['plan_name'] ?: 'free');
+$planEndsAt   = $planRow['plan_ends_at']  ?? null;
+$nextPlanName = $planRow['next_plan_name'] ?? null;
 ?>
 
 <style>
@@ -140,6 +142,18 @@ $userPlan = (string)($planRow['plan_name'] ?: 'free');
     <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white mb-2">Vyberte si váš plán</h1>
     <p class="text-sm text-slate-500 dark:text-slate-400">Všetky ceny sú vrátane DPH 23 %</p>
   </div>
+
+  <?php if ($nextPlanName !== null): ?>
+  <?php $nextLabel = match($nextPlanName) { 'pro'=>'Pro','ultra'=>'Ultra','custom'=>'Custom',default=>'Free' }; ?>
+  <div class="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/40 flex items-start gap-3">
+    <span class="text-xl flex-shrink-0">🔔</span>
+    <p class="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
+      Váš súčasný plán <strong><?= e(match($userPlan) { 'pro'=>'Pro','ultra'=>'Ultra','custom'=>'Custom',default=>'Free' }) ?></strong>
+      zostáva plne aktívny<?php if ($planEndsAt): ?> do <strong><?= e(date('d. m. Y', strtotime((string)$planEndsAt))) ?></strong><?php endif; ?>.
+      Potom sa automaticky prepne na <strong><?= e($nextLabel) ?></strong>.
+    </p>
+  </div>
+  <?php endif; ?>
 
   <!-- ── Fixed Plans ───────────────────────────────────────────────── -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
@@ -399,11 +413,21 @@ function toast(msg, type = 'info') {
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3200);
 }
 
-// ── Plan select (visual feedback only) ────────────────────────────
+// ── Plan select ───────────────────────────────────────────────────
 function selectPlan(planId) {
-  const current = <?= json_encode($userPlan) ?>;
+  const current  = <?= json_encode($userPlan) ?>;
+  const endsAt   = <?= json_encode($planEndsAt) ?>;
+  const planOrder = { free: 0, pro: 1, ultra: 2, custom: 3 };
   if (planId === current) return;
-  toast('Kontaktujte nás na info@gastrolink.sk pre aktiváciu plánu.', 'info');
+
+  const isDowngrade = (planOrder[planId] ?? 0) < (planOrder[current] ?? 0);
+
+  if (isDowngrade && endsAt) {
+    const date = new Date(endsAt).toLocaleDateString('sk-SK');
+    toast(`Downgrade na ${planId} sa aktivuje po uplynutí predplatného (${date}). Kontaktujte info@gastrolink.sk.`, 'info');
+  } else {
+    toast('Kontaktujte nás na info@gastrolink.sk pre aktiváciu plánu.', 'info');
+  }
 }
 
 // ── Slider fill ───────────────────────────────────────────────────

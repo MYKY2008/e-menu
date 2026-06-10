@@ -151,6 +151,34 @@ try {
             exit;
         }
 
+        // ── Auto-cleanup inactive free users ──────────────────
+        case 'cleanup_inactive': {
+            $cutoff     = date('Y-m-d\TH:i:s\Z', strtotime('-90 days'));
+            $stInactive = $db->prepare(
+                "SELECT id FROM users
+                 WHERE plan_name = 'free' AND role != 'admin'
+                   AND last_login_at IS NOT NULL AND last_login_at < ?"
+            );
+            $stInactive->execute([$cutoff]);
+            $inactive = $stInactive->fetchAll();
+
+            $deleted = 0;
+            foreach ($inactive as $u) {
+                $uid = (int)$u['id'];
+                if ($uid === (int)$_SESSION['user_id']) continue;
+                $stVenues = $db->prepare("SELECT slug FROM venues WHERE user_id = ?");
+                $stVenues->execute([$uid]);
+                foreach ($stVenues->fetchAll() as $v) {
+                    deleteVenueFiles($v['slug']);
+                }
+                $db->prepare("DELETE FROM users WHERE id = ?")->execute([$uid]);
+                $deleted++;
+            }
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'deleted' => $deleted]);
+            exit;
+        }
+
         default:
             throw new InvalidArgumentException('Neznáma akcia.');
     }

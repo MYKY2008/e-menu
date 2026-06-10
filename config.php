@@ -78,7 +78,10 @@ function getDB(): PDO {
             max_items_per_cat INTEGER NOT NULL DEFAULT 5,
             is_verified       INTEGER NOT NULL DEFAULT 0,
             verify_token      TEXT    DEFAULT NULL,
-            created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+            created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            plan_ends_at      TEXT    DEFAULT NULL,
+            next_plan_name    TEXT    DEFAULT NULL,
+            last_login_at     TEXT    DEFAULT NULL
         )
     ");
     $pdo->exec("
@@ -119,6 +122,9 @@ function getDB(): PDO {
         "ALTER TABLE users      ADD COLUMN max_items_per_cat INTEGER NOT NULL DEFAULT 5",
         "UPDATE users SET max_venues = venue_limit WHERE venue_limit > 1 AND max_venues = 1",
         "UPDATE users SET plan_name = 'pro', max_categories = 10, max_items_per_cat = 25 WHERE plan = 'paid' AND plan_name = 'free'",
+        "ALTER TABLE users ADD COLUMN plan_ends_at TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN next_plan_name TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN last_login_at TEXT DEFAULT NULL",
     ];
     foreach ($migrations as $sql) {
         try { $pdo->exec($sql); } catch (PDOException $ignored) {}
@@ -394,6 +400,34 @@ function getPalette(): array {
         'black'    => ['key'=>'black',    'label'=>'Moderná čierna', 'hex'=>'#111827','light'=>'#F8FAFC','swatch'=>'#111827'],
         'orange'   => ['key'=>'orange',   'label'=>'Teplá oranžová', 'hex'=>'#B84008','light'=>'#FFF0E6','swatch'=>'#EA580C'],
     ];
+}
+
+// ── Plan transition ───────────────────────────────────────────
+function applyPlanTransitionIfNeeded(PDO $db, int $userId): void {
+    $st = $db->prepare("SELECT plan_ends_at, next_plan_name FROM users WHERE id = ?");
+    $st->execute([$userId]);
+    $row = $st->fetch();
+    if (!$row || $row['plan_ends_at'] === null) return;
+    if (strtotime((string)$row['plan_ends_at']) >= time()) return;
+
+    $next = (isset($row['next_plan_name']) && $row['next_plan_name'] !== '')
+        ? $row['next_plan_name'] : 'free';
+
+    if ($next === 'custom') {
+        $db->prepare(
+            "UPDATE users SET plan_name='custom', plan_ends_at=NULL, next_plan_name=NULL WHERE id=?"
+        )->execute([$userId]);
+    } else {
+        [$maxV, $maxC, $maxI] = match($next) {
+            'pro'   => [1, 10, 25],
+            'ultra' => [1, 20, 50],
+            default => [1, 3, 5],
+        };
+        $db->prepare(
+            "UPDATE users SET plan_name=?, max_venues=?, max_categories=?, max_items_per_cat=?,
+             venue_limit=?, plan_ends_at=NULL, next_plan_name=NULL WHERE id=?"
+        )->execute([$next, $maxV, $maxC, $maxI, $maxV, $userId]);
+    }
 }
 
 // ── CSRF ──────────────────────────────────────────────────────

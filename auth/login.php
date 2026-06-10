@@ -70,6 +70,9 @@ $db->prepare("DELETE FROM login_attempts WHERE ip_address = ?")->execute([$ip]);
 
 session_regenerate_id(true);
 
+$db->prepare("UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?")
+   ->execute([(int)$user['id']]);
+
 $_SESSION['user_id']     = (int)$user['id'];
 $_SESSION['username']    = $user['username'];
 $_SESSION['user_role']   = $user['role'];

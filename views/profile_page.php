@@ -11,12 +11,15 @@ $userId = (int)$_SESSION['user_id'];
 $email  = (string)($_SESSION['username'] ?? '');
 
 // Load user plan
-$stUser = $db->prepare("SELECT plan_name, max_categories, max_items_per_cat FROM users WHERE id = ?");
+$stUser = $db->prepare("SELECT plan_name, max_categories, max_items_per_cat, plan_ends_at, next_plan_name FROM users WHERE id = ?");
 $stUser->execute([$userId]);
-$planRow     = $stUser->fetch() ?: [];
-$userPlan    = (string)($planRow['plan_name']        ?: 'free');
-$maxCats     = (int)($planRow['max_categories']       ?: 3);
-$maxItemsCat = (int)($planRow['max_items_per_cat']    ?: 5);
+$planRow      = $stUser->fetch() ?: [];
+$userPlan     = (string)($planRow['plan_name']        ?: 'free');
+$maxCats      = (int)($planRow['max_categories']       ?: 3);
+$maxItemsCat  = (int)($planRow['max_items_per_cat']    ?: 5);
+$planEndsAt   = $planRow['plan_ends_at'] ?? null;
+$nextPlanName = $planRow['next_plan_name'] ?? null;
+$isPaidPlan   = in_array($userPlan, ['pro', 'ultra', 'custom'], true);
 $planLabel   = match($userPlan) {
     'pro'    => 'Pro',
     'ultra'  => 'Ultra',
@@ -40,6 +43,7 @@ $tabs = [
     ['id' => 'account',  'title' => 'Môj Účet',        'desc'  => 'Zmena e-mailu'],
     ['id' => 'security', 'title' => 'Zabezpečenie',     'desc'  => 'Zmena hesla'],
     ['id' => 'plan',     'title' => 'Môj Plán',         'desc'  => 'Free / Paid limity'],
+    ['id' => 'data',     'title' => 'Import / Export',  'desc'  => 'Záloha a prenos menu'],
     ['id' => 'danger',   'title' => 'Nebezpečná zóna',  'desc'  => 'Zmazanie účtu'],
 ];
 ?>
@@ -231,6 +235,20 @@ $tabs = [
             Zmeniť plán
           </a>
 
+          <?php if ($nextPlanName !== null): ?>
+          <?php $nextLabel = match($nextPlanName) { 'pro'=>'Pro','ultra'=>'Ultra','custom'=>'Custom',default=>'Free' }; ?>
+          <div class="mb-5 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/40">
+            <p class="text-xs font-bold text-blue-700 dark:text-blue-300 mb-1">Naplánovaná zmena plánu</p>
+            <p class="text-xs text-blue-600 dark:text-blue-400 leading-relaxed">
+              Váš súčasný plán <strong><?= e($planLabel) ?></strong> zostáva plne aktívny
+              <?php if ($planEndsAt): ?>
+                do <strong><?= e(date('d. m. Y', strtotime((string)$planEndsAt))) ?></strong>.
+              <?php endif; ?>
+              Potom sa prepne na <strong><?= e($nextLabel) ?></strong>.
+            </p>
+          </div>
+          <?php endif; ?>
+
           <?php if ($userPlan === 'free'): ?>
           <div class="space-y-4">
             <?php if (!empty($venueStats)): ?>
@@ -286,7 +304,87 @@ $tabs = [
               <?php endforeach; ?>
             </div>
             <?php endif; ?>
+
+            <?php if ($isPaidPlan): ?>
+            <div class="pt-2">
+              <button onclick="openCancelModal()"
+                class="text-xs font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-400
+                       underline underline-offset-2 transition">
+                Zrušiť predplatné
+              </button>
+            </div>
+            <?php endif; ?>
           </div>
+          <?php endif; ?>
+        </div>
+
+      </div>
+
+      <!-- ── Import / Export ─────────────────────────────────────────────── -->
+      <div id="tab-data" class="space-y-4 hidden">
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">Export</p>
+
+          <?php if (!empty($venueStats)): ?>
+          <div class="space-y-4">
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              Stiahnite celý jedálny lístok prevádzky ako CSV. Súbor môžete neskôr importovať do rovnakej alebo inej prevádzky.
+            </p>
+            <div class="space-y-2">
+              <?php foreach ($venueStats as $vs): ?>
+              <div class="flex items-center justify-between py-2.5 px-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl">
+                <span class="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate mr-3">📍 <?= e($vs['name']) ?></span>
+                <a href="<?= url('api/export_full.php') ?>?slug=<?= urlencode($vs['slug']) ?>&csrf=<?= urlencode(csrfToken()) ?>"
+                   class="flex-shrink-0 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100
+                          dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400
+                          text-xs font-bold rounded-xl transition">
+                  Stiahnuť CSV
+                </a>
+              </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+          <?php else: ?>
+          <p class="text-xs text-slate-400 dark:text-slate-500">Zatiaľ nemáte žiadne prevádzky.</p>
+          <?php endif; ?>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">Import</p>
+
+          <?php if (!empty($venueStats)): ?>
+          <div class="space-y-3">
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              Nahrajte CSV (v rovnakom formáte ako export) do zvolenej prevádzky. Limity plánu budú rešpektované.
+            </p>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Cieľová prevádzka</label>
+              <select id="import-slug"
+                class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                       text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                <?php foreach ($venueStats as $vs): ?>
+                <option value="<?= e($vs['slug']) ?>"><?= e($vs['name']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">CSV súbor</label>
+              <input id="import-file" type="file" accept=".csv,text/csv"
+                class="text-xs text-slate-500 dark:text-slate-400 w-full
+                       file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
+                       file:text-xs file:font-semibold
+                       file:bg-indigo-50 dark:file:bg-indigo-900/30
+                       file:text-indigo-700 dark:file:text-indigo-400
+                       hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50">
+            </div>
+            <button onclick="submitImport()"
+              class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold
+                     rounded-2xl transition-all duration-200 active:scale-95">
+              Importovať CSV
+            </button>
+          </div>
+          <?php else: ?>
+          <p class="text-xs text-slate-400 dark:text-slate-500">Zatiaľ nemáte žiadne prevádzky.</p>
           <?php endif; ?>
         </div>
       </div>
@@ -330,11 +428,36 @@ $tabs = [
   </div>
 </div>
 
+<!-- ── Cancel subscription modal ─────────────────────────────────── -->
+<div id="modal-cancel-plan"
+     class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+     onclick="if(event.target===this)closeCancelModal()">
+  <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl max-w-sm w-full p-6">
+    <p class="text-base font-extrabold text-slate-900 dark:text-white mb-3">Zrušiť obnovu predplatného?</p>
+    <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-5" id="cancel-modal-text">
+      Chcete zrušiť automatické obnovovanie predplatného?
+      Váš prístup a všetky dáta zostanú zachované do konca aktívneho obdobia.
+    </p>
+    <div class="flex flex-col gap-2">
+      <button onclick="cancelPlanConfirm()" id="cancel-plan-btn"
+        class="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold
+               rounded-2xl transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none">
+        Potvrdiť zrušenie obnovy
+      </button>
+      <button onclick="closeCancelModal()"
+        class="w-full py-2.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700
+               text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-2xl transition">
+        Ponechať predplatné
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 const CSRF = <?= json_encode(csrfToken()) ?>;
 
 // ── Tab switching ──────────────────────────────────────────────────
-const TAB_IDS = ['account', 'security', 'plan', 'danger'];
+const TAB_IDS = ['account', 'security', 'plan', 'data', 'danger'];
 function switchTab(id) {
   TAB_IDS.forEach(t => {
     document.getElementById('tab-' + t)?.classList.toggle('hidden', t !== id);
@@ -431,6 +554,78 @@ async function submitDeleteAccount() {
       toast(data.error || 'Chyba.', 'error');
     }
   } catch { toast('Sieťová chyba.', 'error'); }
+}
+
+// ── Import CSV ─────────────────────────────────────────────────────
+async function submitImport() {
+  const slug = document.getElementById('import-slug')?.value;
+  const file = document.getElementById('import-file')?.files?.[0];
+  if (!slug) { toast('Vyberte prevádzku.', 'error'); return; }
+  if (!file) { toast('Vyberte CSV súbor.', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('csrf', CSRF);
+  fd.append('slug', slug);
+  fd.append('file', file);
+
+  try {
+    const res  = await fetchWithTimeout(<?= json_encode(url('api/import_full.php')) ?>, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) {
+      toast(`Importovaných: ${data.imported} jedál. Preskočených: ${data.skipped}.`, 'success');
+      document.getElementById('import-file').value = '';
+    } else {
+      toast(data.error || 'Chyba importu.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+
+// ── Cancel plan modal ──────────────────────────────────────────────
+function openCancelModal() {
+  const m = document.getElementById('modal-cancel-plan');
+  // Update modal text with actual end date if available
+  const endsAt = <?= json_encode($planEndsAt) ?>;
+  const textEl = document.getElementById('cancel-modal-text');
+  if (textEl && endsAt) {
+    const date = new Date(endsAt).toLocaleDateString('sk-SK');
+    textEl.textContent = `Chcete zrušiť automatické obnovovanie predplatného? Váš prístup zostane zachovaný do ${date}.`;
+  }
+  m?.classList.remove('hidden');
+  m?.classList.add('flex');
+}
+function closeCancelModal() {
+  const m = document.getElementById('modal-cancel-plan');
+  m?.classList.add('hidden');
+  m?.classList.remove('flex');
+}
+
+async function cancelPlanConfirm() {
+  const btn = document.getElementById('cancel-plan-btn');
+  if (btn) btn.disabled = true;
+
+  try {
+    const res  = await fetchWithTimeout(<?= json_encode(url('api/user_actions.php')) ?>, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, action: 'cancel_plan' })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (data.deferred) {
+        const date = data.ends_at ? new Date(data.ends_at).toLocaleDateString('sk-SK') : '';
+        toast('Obnova zrušená. Prístup zachovaný' + (date ? ' do ' + date : '') + '.', 'success');
+      } else {
+        toast('Predplatné bolo prepnuté na Free.', 'success');
+      }
+      closeCancelModal();
+      setTimeout(() => { window.location.reload(); }, 1500);
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+      if (btn) btn.disabled = false;
+    }
+  } catch {
+    toast('Sieťová chyba.', 'error');
+    if (btn) btn.disabled = false;
+  }
 }
 
 // Init

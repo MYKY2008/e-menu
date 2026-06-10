@@ -12,17 +12,24 @@ $db     = getDB();
 $userId = (int)$_SESSION['user_id'];
 $role   = (string)($_SESSION['user_role'] ?? 'user');
 
+// Apply deferred plan transition if billing period expired
+if ($role !== 'admin') {
+    applyPlanTransitionIfNeeded($db, $userId);
+}
+
 $stVenues = $db->prepare("SELECT * FROM venues WHERE user_id = ? ORDER BY created_at DESC");
 $stVenues->execute([$userId]);
 $venues = $stVenues->fetchAll();
 
-$stLimit = $db->prepare("SELECT max_venues, plan_name, max_categories, max_items_per_cat FROM users WHERE id = ?");
+$stLimit = $db->prepare("SELECT max_venues, plan_name, max_categories, max_items_per_cat, plan_ends_at, next_plan_name FROM users WHERE id = ?");
 $stLimit->execute([$userId]);
 $stLimitRow  = $stLimit->fetch() ?: [];
 $venueLimit  = $role === 'admin' ? 9999 : (int)($stLimitRow['max_venues']        ?? 1);
 $userPlan    = $role === 'admin' ? 'admin' : (string)($stLimitRow['plan_name']   ?? 'free');
 $maxCats     = $role === 'admin' ? 9999 : (int)($stLimitRow['max_categories']    ?? 3);
 $maxItemsCat = $role === 'admin' ? 9999 : (int)($stLimitRow['max_items_per_cat'] ?? 5);
+$planEndsAt  = $stLimitRow['plan_ends_at'] ?? null;
+$planExpired = $role !== 'admin' && $planEndsAt !== null && strtotime((string)$planEndsAt) < time();
 $venueCount  = count($venues);
 $planLabel   = match($userPlan) {
     'pro'    => 'Pro',
@@ -64,6 +71,12 @@ if ($selected) {
     $row = $ssSt->fetch();
     if ($row) $menuSettings = array_merge($menuSettings, $row);
 }
+
+// Lockdown: plan expired OR limits exceeded after downgrade
+$maxItemsInAnyCat = 0;
+foreach ($menuCategories as $_c) { $maxItemsInAnyCat = max($maxItemsInAnyCat, count($_c['items'])); }
+$limitOverrun = $role !== 'admin' && (count($menuCategories) > $maxCats || $maxItemsInAnyCat > $maxItemsCat);
+$lockdown     = $planExpired || $limitOverrun;
 
 // Scan stats per venue
 $scanStats = [];
@@ -218,20 +231,6 @@ $EU_ALLERGENS = [
         </div>
       </div>
     </div>
-    <?php endif; ?>
-
-    <?php if ($selected): ?>
-    <a href="<?= url('api/export_csv.php') ?>?slug=<?= e($selected['slug']) ?>"
-       class="flex items-center justify-center gap-2 w-full py-2.5
-              bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800
-              text-slate-600 dark:text-slate-400 text-xs font-semibold
-              rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800
-              transition-all duration-200 active:scale-95">
-      <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2"
-           viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
-           d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-      Export menu (CSV)
-    </a>
     <?php endif; ?>
 
   </aside>
@@ -536,6 +535,33 @@ $EU_ALLERGENS = [
         </button>
       </div>
 
+      <?php if ($lockdown): ?>
+      <!-- Lockdown: expired or limit overrun -->
+      <div class="bg-amber-50 dark:bg-amber-900/20 rounded-[2rem] p-8 border border-amber-200 dark:border-amber-800/40 text-center">
+        <p class="text-4xl mb-4">🔒</p>
+        <h3 class="text-base font-bold text-amber-900 dark:text-amber-200 mb-2">Ochranný režim</h3>
+        <p class="text-sm text-amber-700 dark:text-amber-300 mb-6 leading-relaxed max-w-xs mx-auto">
+          Prístup k správe menu je obmedzený. Vaše menu prekračuje limity vášho aktuálneho plánu alebo platba expirovala.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <a href="<?= url('plans') ?>"
+             class="inline-flex items-center justify-center gap-2 px-6 py-2.5
+                    bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold
+                    rounded-2xl transition-all active:scale-95">
+            Upgrade
+          </a>
+          <?php if ($selected): ?>
+          <button onclick="resetMenu('<?= e($selected['slug']) ?>')"
+             class="inline-flex items-center justify-center gap-2 px-6 py-2.5
+                    bg-amber-100 hover:bg-amber-200 dark:bg-amber-800/30 dark:hover:bg-amber-800/50
+                    text-amber-800 dark:text-amber-200 text-sm font-bold
+                    rounded-2xl transition-all active:scale-95">
+            Zresetovať menu podľa limitov
+          </button>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php else: ?>
       <!-- Categories & items -->
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-5 border border-gray-100 dark:border-slate-800">
         <div class="flex items-center justify-between mb-4">
@@ -571,6 +597,7 @@ $EU_ALLERGENS = [
           <p class="text-xs text-slate-400 text-center py-6">Načítavanie…</p>
         </div>
       </div>
+      <?php endif; ?>
       <?php endif; ?>
     </div>
   </section>
@@ -1403,6 +1430,32 @@ async function saveVenue() {
     toast('Sieťová chyba: ' + e.message, 'error');
     if (btn) { btn.textContent = 'Uložiť nastavenia'; btn.classList.remove('opacity-70', 'pointer-events-none'); }
   }
+}
+
+async function resetMenu(slug) {
+  if (!confirm('Zresetovanie zmaže všetky kategórie a jedlá tejto prevádzky. Záloha bude stiahnutá automaticky. Pokračovať?')) return;
+  // Trigger CSV export first
+  const link = document.createElement('a');
+  link.href  = APP_URL + '/api/export_full.php?slug=' + encodeURIComponent(slug) + '&csrf=' + encodeURIComponent(CSRF);
+  link.download = '';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  await new Promise(r => setTimeout(r, 800));
+  // Call reset_menu
+  try {
+    const res  = await fetchWithTimeout(APP_URL + '/api/user_actions.php', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, action: 'reset_menu', slug }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast('Menu bolo zresetované.', 'success');
+      setTimeout(() => { location.reload(); }, 900);
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
 }
 
 async function deleteVenue(slug) {
