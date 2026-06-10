@@ -52,12 +52,12 @@ if (time() - (int)($_SESSION[$scanKey] ?? 0) > 3600) {
 }
 
 // Categories + items
-$catSt = $db->prepare("SELECT * FROM categories WHERE venue_slug = ? ORDER BY sort_order, id");
+$catSt = $db->prepare("SELECT * FROM categories WHERE venue_slug = ? AND is_visible = 1 ORDER BY sort_order, id");
 $catSt->execute([$slug]);
 $categories    = [];
 $featuredItems = [];
 foreach ($catSt->fetchAll() as $cat) {
-    $iSt = $db->prepare("SELECT * FROM items WHERE category_id = ? ORDER BY sort_order, id");
+    $iSt = $db->prepare("SELECT * FROM items WHERE category_id = ? AND is_visible = 1 ORDER BY sort_order, id");
     $iSt->execute([(int)$cat['id']]);
     $cat['items'] = $iSt->fetchAll();
     $categories[] = $cat;

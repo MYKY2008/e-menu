@@ -390,6 +390,31 @@ try {
             exit;
         }
 
+        case 'toggle_visibility': {
+            $type = (string)($payload['type'] ?? '');
+            $id   = (int)($payload['id']   ?? 0);
+            if (!in_array($type, ['category', 'item'], true) || $id <= 0) {
+                throw new InvalidArgumentException('Neplatný typ alebo ID.');
+            }
+            if ($type === 'category') {
+                $row  = $getCategory($id);
+                $slug = $row['venue_slug'];
+                $db->prepare("UPDATE categories SET is_visible = 1 - is_visible WHERE id = ?")
+                   ->execute([$id]);
+            } else {
+                $row    = $getItem($id);
+                $catRow = $db->prepare("SELECT venue_slug FROM categories WHERE id = ?");
+                $catRow->execute([$row['category_id']]);
+                $slug = (string)$catRow->fetchColumn();
+                $db->prepare("UPDATE items SET is_visible = 1 - is_visible WHERE id = ?")
+                   ->execute([$id]);
+            }
+            $touchVenue($slug);
+            ob_end_clean();
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
         default:
             throw new InvalidArgumentException('Neznáma akcia.');
     }

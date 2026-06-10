@@ -1442,6 +1442,8 @@ const DRAG_SVG = `<svg class="w-3 h-4 pointer-events-none" viewBox="0 0 8 14" fi
   <circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/>
   <circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/>
 </svg>`;
+const EYE_SVG     = `<svg class="w-3 h-3 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>`;
+const EYE_OFF_SVG = `<svg class="w-3 h-3 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>`;
 
 // ── Menu tree renderer ────────────────────────────────────────────
 function renderMenuTree() {
@@ -1473,11 +1475,14 @@ function renderMenuTree() {
     const items = cat.items.map(item => `
       <div data-item-id="${item.id}"
            data-search="${esc(item.name + ' ' + (item.description || ''))}"
-           class="cat-item-row flex items-center gap-2 py-2 border-b border-gray-100 dark:border-slate-700/60 last:border-0">
+           class="cat-item-row flex items-center gap-2 py-2 border-b border-gray-100 dark:border-slate-700/60 last:border-0${item.is_visible === 0 ? ' opacity-50' : ''}">
         <span class="drag-item-handle cursor-grab active:cursor-grabbing text-slate-300 dark:text-slate-600 hover:text-slate-400 flex-shrink-0 select-none">${DRAG_SVG}</span>
         <span class="flex-1 text-xs text-slate-700 dark:text-slate-300 truncate font-medium">${esc(item.name)}</span>
         <span class="text-xs font-bold text-slate-400 dark:text-slate-500">${fmtPrice(item.price)}</span>
         ${item.is_featured ? '<span title="Odporúčame" class="text-xs">⭐</span>' : ''}
+        <button onclick="toggleVisibility('item',${item.id})"
+                class="text-slate-400 dark:text-slate-500 hover:text-amber-500 dark:hover:text-amber-400 px-1 transition"
+                title="${item.is_visible === 0 ? 'Zobraziť' : 'Skryť'}">${item.is_visible === 0 ? EYE_OFF_SVG : EYE_SVG}</button>
         <button onclick="openItemModal(${item.id},${cat.id})"
                 class="text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xs px-1 transition"
                 title="Upraviť">✏️</button>
@@ -1488,7 +1493,7 @@ function renderMenuTree() {
 
     return `
       <div data-cat-id="${cat.id}" data-cat-name="${esc(cat.name)}"
-           class="rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden mb-3">
+           class="rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden mb-3${cat.is_visible === 0 ? ' opacity-50' : ''}">
         <div class="flex items-center gap-2 px-3 py-3" style="background:${catBg}">
           <span class="drag-cat-handle cursor-grab active:cursor-grabbing opacity-50 hover:opacity-90 flex-shrink-0 select-none" style="color:${catTc}">${DRAG_SVG}</span>
           <button type="button" onclick="toggleCat(${cat.id})"
@@ -1499,6 +1504,10 @@ function renderMenuTree() {
             <span class="text-xs opacity-60">${cat.items.length} jedál</span>
             <span class="opacity-70">${CHEVRON}</span>
           </button>
+          <button onclick="toggleVisibility('category',${cat.id})"
+                  class="p-1.5 rounded-lg transition opacity-80 hover:opacity-100"
+                  style="background:rgba(${catTc==='#ffffff'?'255,255,255':'0,0,0'},.15);color:${catTc}"
+                  title="${cat.is_visible === 0 ? 'Zobraziť' : 'Skryť'}">${cat.is_visible === 0 ? EYE_OFF_SVG : EYE_SVG}</button>
           <button onclick="openCatModal(${cat.id})"
                   class="p-1.5 rounded-lg transition opacity-80 hover:opacity-100 text-xs"
                   style="background:rgba(${catTc==='#ffffff'?'255,255,255':'0,0,0'},.15);color:${catTc}"
@@ -1596,6 +1605,25 @@ async function reorderApi(type, ids, venueSlug, targetCatId = null, snapshot = n
   }
 }
 
+async function toggleVisibility(type, id) {
+  const data = await menuApi({ csrf: CSRF, action: 'toggle_visibility', type, id });
+  if (data.ok) {
+    if (type === 'category') {
+      const cat = menuData.categories.find(c => c.id === id);
+      if (cat) cat.is_visible = cat.is_visible === 0 ? 1 : 0;
+    } else {
+      for (const cat of menuData.categories) {
+        const item = cat.items.find(i => i.id === id);
+        if (item) { item.is_visible = item.is_visible === 0 ? 1 : 0; break; }
+      }
+    }
+    renderMenuTree();
+    updatePreview();
+  } else {
+    toast(data.error || 'Chyba.', 'error');
+  }
+}
+
 // ── Accordion toggle ──────────────────────────────────────────────
 function toggleCat(catId) {
   const body = document.getElementById('cat-body-' + catId);
@@ -1657,7 +1685,7 @@ function updatePreview() {
 
   const vName  = (document.getElementById('f-name')?.value.trim()) || 'Váš podnik';
   const vLogo  = document.getElementById('f-logo')?.value || '';
-  const cats   = menuData.categories;
+  const cats   = menuData.categories.filter(c => c.is_visible !== 0);
   const s      = menuData.settings;
 
   // Dark mode colors
@@ -1695,7 +1723,7 @@ function updatePreview() {
 
   // Featured strip
   if (s.show_featured) {
-    const fi = cats.flatMap(c => c.items.filter(i => i.is_featured));
+    const fi = cats.flatMap(c => c.items.filter(i => i.is_featured && i.is_visible !== 0));
     if (fi.length) {
       html += `<div style="background:${sectionBg};padding:8px 6px 4px;
                             border-bottom:1px solid ${pageBdr}">
@@ -1717,15 +1745,17 @@ function updatePreview() {
 
   // Category sections
   cats.forEach(cat => {
-    const catBg = cat.bg_color || s.default_category_color || '#1E3A5F';
-    const catTc = yiq(catBg);
+    const catBg    = cat.bg_color || s.default_category_color || '#1E3A5F';
+    const catTc    = yiq(catBg);
+    const visItems = cat.items.filter(i => i.is_visible !== 0);
+    if (!visItems.length) return;
     html += `<div>
       <div style="background:${catBg};padding:6px 8px;display:flex;align-items:center;gap:4px">
         ${cat.icon ? `<span style="font-size:10px">${esc(cat.icon)}</span>` : ''}
         <span style="font-weight:800;font-size:8.5px;color:${catTc}">${esc(cat.name)}</span>
       </div>
       <div style="background:${sectionBg};padding:4px 5px 3px;display:flex;flex-direction:column;gap:3px">
-        ${cat.items.length ? cat.items.map(item => {
+        ${visItems.length ? visItems.map(item => {
           const ibg = item.bg_color || s.default_item_color || '#FFFFFF';
           const itc = yiq(ibg);
           const imt = yiqMuted(ibg);
