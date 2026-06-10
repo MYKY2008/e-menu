@@ -121,7 +121,7 @@ $AL = [
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="<?= e($accentHex) ?>">
 <meta name="description" content="<?= e($ogDesc) ?>">
 <title><?= e($venue['name']) ?> — Menu</title>
 <!-- Open Graph / Social sharing -->

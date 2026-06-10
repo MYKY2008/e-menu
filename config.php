@@ -32,6 +32,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start([
         'cookie_httponly' => true,
         'cookie_samesite' => 'Lax',
+        'cookie_secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'cookie_lifetime' => 0,
         'use_strict_mode' => true,
         'gc_maxlifetime'  => 7200,
     ]);
@@ -154,6 +156,12 @@ function getDB(): PDO {
         timestamp  INTEGER NOT NULL
     )");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address)");
+
+    // ── Performance indexes ───────────────────────────────────
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_venues_user_id        ON venues(user_id)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_categories_venue_slug ON categories(venue_slug)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_items_category_id     ON items(category_id)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_venue_settings_slug   ON venue_settings(venue_slug)');
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS password_resets (
         email      TEXT    NOT NULL,
@@ -298,12 +306,23 @@ function deleteImageFile(?string $relPath): void {
 }
 
 function deleteVenueFiles(string $slug): void {
-    $st = getDB()->prepare("SELECT logo, cover_image FROM venues WHERE slug = ?");
+    $db = getDB();
+    $st = $db->prepare("SELECT logo, cover_image FROM venues WHERE slug = ?");
     $st->execute([$slug]);
     $r = $st->fetch();
     if ($r) {
         deleteImageFile($r['logo']        ?? null);
         deleteImageFile($r['cover_image'] ?? null);
+    }
+    // Delete all item images belonging to this venue
+    $imgSt = $db->prepare("
+        SELECT i.image FROM items i
+        JOIN categories c ON c.id = i.category_id
+        WHERE c.venue_slug = ? AND i.image IS NOT NULL
+    ");
+    $imgSt->execute([$slug]);
+    foreach ($imgSt->fetchAll() as $row) {
+        deleteImageFile($row['image']);
     }
 }
 
@@ -406,6 +425,20 @@ function requireAdmin(): void {
     }
 }
 
+// ── Error logging ─────────────────────────────────────────────
+function gl_log(string $message): void {
+    static $dir = null;
+    if ($dir === null) {
+        $dir = BASE_DIR . DIRECTORY_SEPARATOR . 'storage';
+        if (!is_dir($dir)) @mkdir($dir, 0750, true);
+    }
+    @file_put_contents(
+        $dir . DIRECTORY_SEPARATOR . 'error.log',
+        '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL,
+        FILE_APPEND | LOCK_EX
+    );
+}
+
 // ── E-mail (PHPMailer) ────────────────────────────────────────
 function sendEmail(string $to, string $subject, string $htmlBody): bool {
     require_once BASE_DIR . '/libs/PHPMailer/src/Exception.php';
@@ -436,9 +469,17 @@ function sendEmail(string $to, string $subject, string $htmlBody): bool {
         $mail->send();
         return true;
     } catch (\Exception $e) {
-        error_log('sendEmail error: ' . $e->getMessage());
+        gl_log('sendEmail error: ' . $e->getMessage());
         return false;
     }
+}
+
+// ── Session IP guard (anti-hijacking) ────────────────────────
+if (!empty($_SESSION['user_id']) && !empty($_SESSION['login_ip']) &&
+    $_SESSION['login_ip'] !== ($_SERVER['REMOTE_ADDR'] ?? '')) {
+    session_destroy();
+    header('Location: ' . url('login'));
+    exit;
 }
 
 // ── Garbage collector (1 % lottery) ──────────────────────────

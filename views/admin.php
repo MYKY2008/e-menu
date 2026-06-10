@@ -344,8 +344,14 @@ $flash = getFlash();
 const CSRF    = <?= json_encode(csrfToken()) ?>;
 const API_URL = <?= json_encode(url('api/admin_actions.php')) ?>;
 
+function fetchWithTimeout(url, options, ms = 10000) {
+  const ctrl = new AbortController();
+  const id   = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(id));
+}
+
 async function adminApi(payload) {
-  const res = await fetch(API_URL, {
+  const res = await fetchWithTimeout(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...payload, csrf: CSRF })

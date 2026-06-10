@@ -25,6 +25,20 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 $successMsg = 'Ak je e-mail registrovaný, pošleme vám odkaz na reset hesla. Skontrolujte svoju schránku.';
 
 $db = getDB();
+
+// ── Rate limit: max 3 reset attempts per IP per 15 min ───────────
+$ip          = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+$now         = time();
+$windowStart = $now - 900;
+$stCount     = $db->prepare("SELECT COUNT(*) FROM login_attempts WHERE ip_address = ? AND timestamp >= ?");
+$stCount->execute([$ip, $windowStart]);
+if ((int)$stCount->fetchColumn() >= 3) {
+    flash('Príliš veľa pokusov. Skúste to znova o 15 minút.', 'error');
+    header('Location: ' . url('forgot-password'));
+    exit;
+}
+$db->prepare("INSERT INTO login_attempts (ip_address, timestamp) VALUES (?, ?)")->execute([$ip, $now]);
+
 $st = $db->prepare("SELECT id FROM users WHERE username = ?");
 $st->execute([$email]);
 $user = $st->fetch();

@@ -1,40 +1,48 @@
-# PROMPT: Finálne doladenie (Bezpečnosť, Údržba a Mobile UX)
+# PROMPT: Finálne technické "Hardening" (Výkon a Bezpečnosť)
 
-**CIEĽ:** Zabezpečiť systém proti spamu, optimalizovať úložisko a dotiahnuť vizuálne detaily pre mobilné prehliadače.
+**CIEĽ:** Optimalizovať databázu pre rýchlosť, zvýšiť bezpečnosť sedení (sessions), zabezpečiť hĺbkové čistenie disku a zlepšiť stabilitu frontendu.
 
 ---
 
-### 🛠️ ÚLOHA 1: Rate Limiting (Ochrana proti spamu)
-**Problém:** Registrácia a reset hesla sú momentálne bez ochrany.
+### 🛠️ ÚLOHA 1: Databázová Optimalizácia (Indexy)
+**Súbor:** `config.php` (funkcia `getDB`)
 **Inštrukcie:**
-1. Uprav `auth/register.php` a `auth/forgot_password_process.php`.
-2. Implementuj kontrolu pokusov z danej IP adresy pomocou existujúcej tabuľky `login_attempts` (podobne ako v `auth/login.php`).
-3. **Limit:** Max 3 registrácie / 3 resety hesla za 15 minút z jednej IP.
+Pridaj nasledujúce SQL príkazy pre vytvorenie indexov na cudzích kľúčoch (Foreign Keys), aby sa zrýchlilo načítanie menu a admina:
+1. `CREATE INDEX IF NOT EXISTS idx_venues_user_id ON venues(user_id)`
+2. `CREATE INDEX IF NOT EXISTS idx_categories_venue_slug ON categories(venue_slug)`
+3. `CREATE INDEX IF NOT EXISTS idx_items_category_id ON items(category_id)`
+4. `CREATE INDEX IF NOT EXISTS idx_venue_settings_slug ON venue_settings(venue_slug)`
 
 ---
 
-### 🛠️ ÚLOHA 2: Image Cleanup (Úspora miesta)
-**Problém:** Pri zmene alebo zmazaní jedla/loga ostávajú staré súbory na disku.
+### 🛠️ ÚLOHA 2: Session Hardening (IP Validation)
+**Súbor:** `config.php`
 **Inštrukcie:**
-1. V `api/manage_menu.php` zabezpeč, aby sa pri akcii `delete_item` fyzicky zmazal obrázok z priečinka `uploads/venues/` (použi funkciu `deleteImageFile` z `config.php`).
-2. Pri akcii `save_item`, ak sa nahráva nová fotka a položka už mala starú fotku, starý súbor musí byť zmazaný.
-3. Prever rovnakú logiku v `api/save_venue.php` pre logá a cover fotky.
+1. V `session_start` nastaveniach pridaj `'cookie_secure' => true` (iba ak je web na HTTPS) a `'cookie_lifetime' => 0`.
+2. Implementuj ochranu proti Session Hijacking:
+   - Po prihlásení v `auth/login.php` ulož do `$_SESSION['login_ip'] = $_SERVER['REMOTE_ADDR']`.
+   - V `config.php` (v hlavnom bloku, nie vo funkcii) pridaj kontrolu: Ak je používateľ prihlásený a jeho aktuálna IP sa nezhoduje s `$_SESSION['login_ip']`, okamžite znič session (`session_destroy()`) a odhlás ho.
 
 ---
 
-### 🛠️ ÚLOHA 3: Mobile UX & SEO Polish
+### 🛠️ ÚLOHA 3: Hĺbkové čistenie disku (Deep Cleanup)
+**Súbor:** `api/admin_actions.php` (akcia `delete_user`)
 **Inštrukcie:**
-1. **Theme Color:** Uprav `views/partials/header.php`, aby prijímal voliteľnú premennú `$themeColor`. Ak existuje, pridaj `<meta name="theme-color" content="...">`.
-2. V `views/client_view.php` nastav túto premennú na primárnu farbu prevádzky. Týmto sa lišta mobilného prehliadača (Chrome/Safari) zafarbí podľa farby podniku.
-3. **App Title:** Zabezpeč, aby v `header.php` bol názov stránky vždy v tvare `Názov | GastroLink QR`.
+Pri mazaní používateľa momentálne SQLite zmaže dáta v DB (cascade), ale súbory na disku ostanú.
+1. Pred samotným `DELETE FROM users` pridaj cyklus, ktorý vyhľadá všetky prevádzky (`venues`) daného používateľa.
+2. Pre každú prevádzku zavolaj:
+   - Fyzické zmazanie loga a cover fotky.
+   - Fyzické zmazanie všetkých fotiek jedál (items) patriacich do tejto prevádzky.
+   - *Tip:* Využi existujúcu funkciu `deleteVenueFiles($slug)` a rozšír ju, aby čistila aj obrázky jedál.
 
 ---
 
-### 🛠️ ÚLOHA 4: Error Logging
+### 🛠️ ÚLOHA 4: AJAX Resilience (Timeouty)
+**Súbory:** `views/dashboard.php`, `views/admin.php`
 **Inštrukcie:**
-1. V `config.php` vytvor jednoduchú funkciu `gl_log($message)`.
-2. Funkcia zapíše chybu s časovou pečiatkou do súboru (napr. `storage/error.log`). Zabezpeč, aby priečinok `storage` existoval a súbor nebol prístupný z webu (cez `.htaccess` alebo umiestnením).
-3. Nahraď v kritických `catch` blokoch v API (najmä v `PHPMailer`) priame `error_log` touto novou funkciou.
+1. Vytvor pomocnú JavaScript funkciu `fetchWithTimeout(url, options, timeout = 10000)`.
+2. Táto funkcia musí použiť `AbortController` na prerušenie požiadavky po 10 sekundách.
+3. Nahraď kritické `fetch()` volania (uloženie menu, zmena hesla, zmena limitov) touto novou funkciou, aby aplikácia nezamrzla pri slabom pripojení.
 
 ---
-**VÝSTUP:** Dodaj upravené súbory: `config.php`, `auth/register.php`, `auth/forgot_password_process.php`, `api/manage_menu.php`, `api/save_venue.php` a `views/partials/header.php`.
+**VÝSTUP:** Upravené súbory `config.php`, `auth/login.php`, `api/admin_actions.php`, `views/dashboard.php` a `views/admin.php`.

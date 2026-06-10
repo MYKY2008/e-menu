@@ -174,6 +174,10 @@ try {
             $id = (int)($payload['id'] ?? 0);
             if ($id < 1) throw new InvalidArgumentException('Neplatné ID.');
             $cat = $getCategory($id);
+            // Delete image files of all items in this category before cascade-deleting them
+            $imgSt = $db->prepare("SELECT image FROM items WHERE category_id = ? AND image IS NOT NULL");
+            $imgSt->execute([$id]);
+            foreach ($imgSt->fetchAll() as $row) { deleteImageFile($row['image']); }
             $db->prepare("DELETE FROM categories WHERE id = ?")->execute([$id]);
             $touchVenue($cat['venue_slug']);
             $menu = $loadMenu($cat['venue_slug']);

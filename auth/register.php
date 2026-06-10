@@ -41,6 +41,19 @@ if ($password !== $password2) {
 
 $db = getDB();
 
+// ── Rate limit: max 3 registration attempts per IP per 15 min ────
+$ip          = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+$now         = time();
+$windowStart = $now - 900;
+$stCount     = $db->prepare("SELECT COUNT(*) FROM login_attempts WHERE ip_address = ? AND timestamp >= ?");
+$stCount->execute([$ip, $windowStart]);
+if ((int)$stCount->fetchColumn() >= 3) {
+    flash('Príliš veľa pokusov o registráciu. Skúste to znova o 15 minút.', 'error');
+    header('Location: ' . url('register'));
+    exit;
+}
+$db->prepare("INSERT INTO login_attempts (ip_address, timestamp) VALUES (?, ?)")->execute([$ip, $now]);
+
 // Check uniqueness
 $st = $db->prepare("SELECT id FROM users WHERE username = ?");
 $st->execute([$username]);

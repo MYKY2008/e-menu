@@ -841,6 +841,13 @@ let currentVenueColor = <?= json_encode($selected ? $selected['color'] : 'black'
 let previewDark       = <?= json_encode((int)($menuSettings['dark_mode_default'] ?? 0) === 1) ?>;
 let activeTab         = 'settings';
 
+// ── Network helpers ───────────────────────────────────────────────
+function fetchWithTimeout(url, options, ms = 10000) {
+  const ctrl = new AbortController();
+  const id   = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(id));
+}
+
 // ── YIQ contrast (threshold 140) ─────────────────────────────────
 function yiq(hex) {
   if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return '#1e293b';
@@ -1224,7 +1231,7 @@ async function saveMenuSettings() {
 // ── Menu API ──────────────────────────────────────────────────────
 async function menuApi(payload) {
   try {
-    const res = await fetch(APP_URL + '/api/manage_menu.php', {
+    const res = await fetchWithTimeout(APP_URL + '/api/manage_menu.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1280,7 +1287,7 @@ async function saveVenue() {
     cover_image:   document.getElementById('f-cover').value,
   };
   try {
-    const res  = await fetch(APP_URL + '/api/save_venue.php', {
+    const res  = await fetchWithTimeout(APP_URL + '/api/save_venue.php', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
@@ -1303,7 +1310,7 @@ async function saveVenue() {
 async function deleteVenue(slug) {
   if (!confirm(`Naozaj zmazať prevádzku "${slug}" aj so všetkými jedlami?`)) return;
   try {
-    const res  = await fetch(APP_URL + '/api/save_venue.php', {
+    const res  = await fetchWithTimeout(APP_URL + '/api/save_venue.php', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ csrf: CSRF, action: 'delete', slug }),
     });
@@ -1679,7 +1686,7 @@ async function submitPasswordChange() {
   const newPw2 = document.getElementById('cp-new2').value;
   if (!oldPw || !newPw || !newPw2) { toast('Vyplňte všetky polia.', 'error'); return; }
   try {
-    const res = await fetch(<?= json_encode(url('api/change_password.php')) ?>, {
+    const res = await fetchWithTimeout(<?= json_encode(url('api/change_password.php')) ?>, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ csrf: CSRF, old_password: oldPw, new_password: newPw, new_password2: newPw2 })

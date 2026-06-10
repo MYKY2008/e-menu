@@ -5,6 +5,13 @@ require_once __DIR__ . '/config.php';
 // ── PHP built-in server: serve real files directly ────────────
 if (PHP_SAPI === 'cli-server') {
     $file = __DIR__ . parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+    // Block direct access to storage/ directory
+    $realStorage = str_replace('\\', '/', realpath(__DIR__ . '/storage') ?: (__DIR__ . '/storage'));
+    $realFile    = str_replace('\\', '/', realpath($file) ?: $file);
+    if (str_starts_with($realFile, $realStorage . '/') || $realFile === $realStorage) {
+        http_response_code(403);
+        exit;
+    }
     if (is_file($file)) {
         if (pathinfo($file, PATHINFO_EXTENSION) !== 'php') {
             return false; // serve CSS, JS, images, etc. as-is
