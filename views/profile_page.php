@@ -98,7 +98,7 @@ $venueStats = $stVenueStats->fetchAll();
 
 // Load orders history
 $stOrders = $db->prepare(
-    "SELECT plan_name, amount, currency, status, invoice_id, created_at
+    "SELECT id, plan_name, amount, currency, status, invoice_id, created_at
      FROM orders WHERE user_id = ? ORDER BY created_at DESC"
 );
 $stOrders->execute([$userId]);
@@ -527,11 +527,14 @@ $tabs = [
                     </span>
                   </td>
                   <td class="py-3">
-                    <?php if ($order['status'] === 'paid'): ?>
-                    <button class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold"
-                            onclick="toast('PDF faktúry bude dostupné čoskoro.', 'info')" type="button">
+                    <?php if ($order['status'] === 'paid' && !empty($order['invoice_id'])): ?>
+                    <a href="<?= url('api/payments/download_invoice.php') ?>?order_id=<?= (int)$order['id'] ?>"
+                       class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold whitespace-nowrap"
+                       target="_blank">
                       Stiahnuť PDF
-                    </button>
+                    </a>
+                    <?php elseif ($order['status'] === 'paid'): ?>
+                    <span class="text-xs text-amber-500 dark:text-amber-400 font-medium">Spracováva sa…</span>
                     <?php else: ?>
                     <span class="text-slate-300 dark:text-slate-600">—</span>
                     <?php endif; ?>

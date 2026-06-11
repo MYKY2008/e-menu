@@ -3,6 +3,7 @@ declare(strict_types=1);
 // Webhook nesmie spúšťať session (volá ho Stripe, nie prehliadač)
 define('SKIP_SESSION', true);
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../libs/superfaktura.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -79,17 +80,40 @@ switch ($event['type'] ?? '') {
             "UPDATE orders SET status='paid', amount=? WHERE stripe_session_id=?"
         )->execute([$amount, $sessionId]);
 
+        // Načítaj ID objednávky + fakturačné údaje užívateľa
+        $stOrd = $db->prepare("SELECT id FROM orders WHERE stripe_session_id = ?");
+        $stOrd->execute([$sessionId]);
+        $ordRow = $stOrd->fetch();
+
+        $stBill = $db->prepare(
+            "SELECT username, company_name, ico, dic, ic_dph,
+             billing_street, billing_city, billing_zip, billing_country FROM users WHERE id = ?"
+        );
+        $stBill->execute([$userId]);
+        $userBilling = $stBill->fetch() ?: [];
+
+        // Vystaviť faktúru v SuperFaktura
+        $sfId = sfCreateInvoice(
+            ['id' => (int)($ordRow['id'] ?? 0), 'plan_name' => $planId, 'amount' => $amount, 'currency' => 'EUR'],
+            $userBilling
+        );
+        if ($sfId !== null && isset($ordRow['id'])) {
+            $db->prepare("UPDATE orders SET invoice_id = ? WHERE id = ?")
+               ->execute([$sfId, (int)$ordRow['id']]);
+        }
+
         break;
     }
 
     // ── Obnova predplatného ───────────────────────────────────────
     case 'invoice.paid': {
-        $invoice = $event['data']['object'] ?? [];
-        $subId   = (string)($invoice['subscription'] ?? '');
-        $amount  = (float)(($invoice['amount_paid']  ?? 0) / 100);
-        $invId   = (string)($invoice['id']           ?? '');
+        $invoice       = $event['data']['object'] ?? [];
+        $subId         = (string)($invoice['subscription']    ?? '');
+        $billingReason = (string)($invoice['billing_reason']  ?? '');
+        $amount        = (float)(($invoice['amount_paid']     ?? 0) / 100);
 
-        if (!$subId) break;
+        // subscription_create je prvá platba — riešená cez checkout.session.completed
+        if (!$subId || $billingReason === 'subscription_create') break;
 
         $st = $db->prepare("SELECT id, plan_name FROM users WHERE stripe_subscription_id = ?");
         $st->execute([$subId]);
@@ -100,9 +124,27 @@ switch ($event['type'] ?? '') {
         $db->prepare("UPDATE users SET plan_ends_at=? WHERE id=?")->execute([$planEndsAt, (int)$user['id']]);
 
         $db->prepare(
-            "INSERT INTO orders (user_id, plan_name, amount, currency, status, invoice_id, created_at)
-             VALUES (?, ?, ?, 'EUR', 'paid', ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))"
-        )->execute([(int)$user['id'], $user['plan_name'], $amount, $invId ?: null]);
+            "INSERT INTO orders (user_id, plan_name, amount, currency, status, created_at)
+             VALUES (?, ?, ?, 'EUR', 'paid', strftime('%Y-%m-%dT%H:%M:%SZ','now'))"
+        )->execute([(int)$user['id'], $user['plan_name'], $amount]);
+        $newOrderId = (int)$db->lastInsertId();
+
+        // Fakturačné údaje + SuperFaktura faktúra
+        $stBill = $db->prepare(
+            "SELECT username, company_name, ico, dic, ic_dph,
+             billing_street, billing_city, billing_zip, billing_country FROM users WHERE id = ?"
+        );
+        $stBill->execute([(int)$user['id']]);
+        $userBilling = $stBill->fetch() ?: [];
+
+        $sfId = sfCreateInvoice(
+            ['id' => $newOrderId, 'plan_name' => $user['plan_name'], 'amount' => $amount, 'currency' => 'EUR'],
+            $userBilling
+        );
+        if ($sfId !== null) {
+            $db->prepare("UPDATE orders SET invoice_id = ? WHERE id = ?")
+               ->execute([$sfId, $newOrderId]);
+        }
 
         break;
     }
