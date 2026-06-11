@@ -27,17 +27,6 @@ try {
 
     switch ($action) {
 
-        // ── Update max_venues (legacy alias) ──────────────────
-        case 'update_limit': {
-            $uid   = (int)($payload['user_id']     ?? 0);
-            $limit = max(0, min(9999, (int)($payload['venue_limit'] ?? 1)));
-            if ($uid < 1) throw new InvalidArgumentException('Neplatné ID.');
-            $db->prepare("UPDATE users SET max_venues = ?, venue_limit = ? WHERE id = ?")->execute([$limit, $limit, $uid]);
-            ob_end_clean();
-            echo json_encode(['ok' => true]);
-            exit;
-        }
-
         // ── Reset password ────────────────────────────────────
         case 'reset_password': {
             $uid  = (int)($payload['user_id'] ?? 0);
@@ -123,29 +112,67 @@ try {
             exit;
         }
 
-        // ── Update plan & limits ──────────────────────────────
-        case 'update_plan': {
-            $uid      = (int)($payload['user_id'] ?? 0);
-            $planName = in_array($payload['plan_name'] ?? '', ['free','pro','ultra','custom'], true)
-                        ? $payload['plan_name'] : 'free';
-            $maxV = max(0, min(9999, (int)($payload['max_venues']        ?? 1)));
-            $maxC = max(0, min(9999, (int)($payload['max_categories']    ?? 3)));
-            $maxI = max(0, min(9999, (int)($payload['max_items_per_cat'] ?? 5)));
-            if ($uid < 1) throw new InvalidArgumentException('Neplatné ID.');
-            $db->prepare(
-                "UPDATE users SET plan_name = ?, max_venues = ?, max_categories = ?, max_items_per_cat = ?, venue_limit = ? WHERE id = ?"
-            )->execute([$planName, $maxV, $maxC, $maxI, $maxV, $uid]);
-            ob_end_clean();
-            echo json_encode(['ok' => true]);
-            exit;
-        }
-
         // ── Delete venue ──────────────────────────────────────
         case 'delete_venue': {
             $slug = sanitizeSlug((string)($payload['slug'] ?? ''));
             if (!preg_match(SLUG_PATTERN, $slug)) throw new InvalidArgumentException('Neplatný slug.');
             deleteVenueFiles($slug);
             $db->prepare("DELETE FROM venues WHERE slug = ?")->execute([$slug]);
+            ob_end_clean();
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
+        // ── Update user: plan + ends_at + limits + role ──────
+        case 'update_user_admin': {
+            $uid     = (int)($payload['user_id'] ?? 0);
+            $plan    = in_array($payload['plan_name'] ?? '', ['free','pro','ultra','custom'], true)
+                       ? $payload['plan_name'] : 'free';
+            $maxV    = max(0, min(9999, (int)($payload['max_venues']        ?? 1)));
+            $maxC    = max(0, min(9999, (int)($payload['max_categories']    ?? 3)));
+            $maxI    = max(0, min(9999, (int)($payload['max_items_per_cat'] ?? 5)));
+            $endsAt  = $payload['plan_ends_at'] ?? null;
+            $role    = in_array($payload['role'] ?? '', ['user','admin'], true)
+                       ? $payload['role'] : 'user';
+            if ($uid < 1) throw new InvalidArgumentException('Neplatné ID.');
+            if ($endsAt !== null && $endsAt !== '') {
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', (string)$endsAt)) {
+                    throw new InvalidArgumentException('Neplatný formát dátumu.');
+                }
+            } else {
+                $endsAt = null;
+            }
+            if ($uid === (int)$_SESSION['user_id'] && $role !== 'admin') {
+                throw new InvalidArgumentException('Nemôžete si sám odobrať admin rolu.');
+            }
+            $db->prepare(
+                "UPDATE users SET plan_name=?, max_venues=?, max_categories=?,
+                 max_items_per_cat=?, venue_limit=?, plan_ends_at=?, role=? WHERE id=?"
+            )->execute([$plan, $maxV, $maxC, $maxI, $maxV, $endsAt, $role, $uid]);
+            $stU = $db->prepare(
+                "SELECT id, plan_name, plan_ends_at, max_venues, max_categories, max_items_per_cat, role FROM users WHERE id = ?"
+            );
+            $stU->execute([$uid]);
+            $upd = $stU->fetch();
+            ob_end_clean();
+            echo json_encode(['ok' => true, 'user' => [
+                'id'               => (int)$upd['id'],
+                'plan_name'        => $upd['plan_name'],
+                'plan_ends_at'     => $upd['plan_ends_at'],
+                'max_venues'       => (int)$upd['max_venues'],
+                'max_categories'   => (int)$upd['max_categories'],
+                'max_items_per_cat'=> (int)$upd['max_items_per_cat'],
+                'role'             => $upd['role'],
+            ]]);
+            exit;
+        }
+
+        // ── Delete / truncate error log ───────────────────────
+        case 'delete_log': {
+            $logFile = BASE_DIR . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'error.log';
+            if (is_file($logFile)) {
+                file_put_contents($logFile, '');
+            }
             ob_end_clean();
             echo json_encode(['ok' => true]);
             exit;

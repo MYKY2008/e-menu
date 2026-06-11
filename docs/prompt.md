@@ -1,30 +1,33 @@
-# ÚLOHA: Implementácia fakturácie (Fáza 2 - SuperFaktura & PDF)
+# ÚLOHA: Security Hardening (Bezpečnostné posilnenie)
 
-Cieľom je automatizovať vystavovanie faktúr po úspešnej platbe a umožniť užívateľom ich sťahovanie.
+Cieľom je implementovať pokročilé bezpečnostné mechanizmy a odstrániť potenciálne zraniteľnosti v celom projekte.
 
-## 1. SuperFaktura API Integrácia
-- Vytvor pomocnú triedu alebo sadu funkcií (napr. v `libs/superfaktura.php`) na komunikáciu so SuperFaktura API.
-- Vyžaduje premenné v `.env`: `SF_EMAIL`, `SF_API_KEY`, `SF_COMPANY_ID`.
-- Implementuj funkciu na vytvorenie faktúry (regular invoice) na základe údajov o užívateľovi (IČO, DIČ, adresa) a objednávke.
+## 1. Globálne bezpečnostné hlavičky (config.php)
+- Na začiatok `config.php` pridaj odosielanie bezpečnostných hlavičiek cez `header()`:
+    - `X-Frame-Options: SAMEORIGIN`
+    - `X-Content-Type-Options: nosniff`
+    - `Referrer-Policy: strict-origin-when-cross-origin`
+    - `Permissions-Policy: geolocation=(), camera=(), microphone=()`
+- **Implementuj Content Security Policy (CSP):**
+    - Povoľ skripty len z 'self' a dôveryhodných CDN (cdnjs, cdn.jsdelivr.net).
+    - Povoľ štýly z 'self', 'unsafe-inline' (kvôli dynamickým farbám) a Google Fonts.
+    - Zakáž `object-src 'none'`.
 
-## 2. Webhook Update (api/payments/webhook.php)
-- Uprav spracovanie eventu `checkout.session.completed` a `invoice.paid`:
-    - Po úspešnom zápise platby do DB zavolaj SuperFaktura API.
-    - Odošli firemné údaje užívateľa (`company_name`, `ico`, `dic`, atď.) do SuperFaktury.
-    - Získané `invoice_id` (zo SuperFaktury) ulož do tabuľky `orders` v stĺpci `invoice_id`.
+## 2. Ochrana súborov a priečinkov
+- Do každého súboru, ktorý sa len inkluduje (napr. v `libs/`, `views/partials/`, `config.php`), pridaj na začiatok kontrolu:
+  `defined('BASE_DIR') or die('Access denied');`
+- Vytvor súbor `uploads/.htaccess`, ktorý zakáže spúšťanie PHP skriptov:
+  `php_flag engine off` (ak to server podporuje) a `AddHandler cgi-script .php .phtml .php3`.
 
-## 3. Sťahovanie PDF (api/payments/download_invoice.php)
-- Vytvor nový endpoint, ktorý:
-    - Overí, či je užívateľ prihlásený a či mu daná objednávka patrí.
-    - Načíta `invoice_id` z tabuľky `orders`.
-    - Vyžiada PDF dokument zo SuperFaktura API.
-    - Vráti PDF súbor priamo do prehliadača užívateľa so správnymi hlavičkami (`Content-Type: application/pdf`).
+## 3. Refaktoring klientskeho menu (views/client_view.php)
+- Odstráň inline JSON objekty z atribútov `onclick` pri jedlách.
+- Namiesto toho ulož dáta o jedle do `data-item='...'` atribútu (zakódované cez `e(json_encode(...))`).
+- Uprav JavaScript tak, aby pri kliknutí načítal dáta z `dataset.item`.
+- Týmto sa eliminujú problémy s úvodzovkami a potenciálny XSS.
 
-## 4. UI Profil (views/profile_page.php)
-- V záložke **"Faktúry"** sprevádzkuj tlačidlo "Stiahnuť PDF".
-- Tlačidlo by malo smerovať na `api/payments/download_invoice.php?order_id=XXX`.
-- Ak `invoice_id` v DB chýba (faktúra sa ešte negenerovala), tlačidlo deaktivuj alebo zobraz informáciu "Spracováva sa".
+## 4. Validácia vstupov a Sanizácia
+- V `api/manage_menu.php` a `api/save_venue.php` prever, či sú všetky textové vstupy prehnané cez `purify()`.
+- Zabezpeč, aby sa pri nahrávaní súborov v `saveImageFile` (v `config.php`) vždy vygeneroval nový názov súboru (už sa deje, ale over to).
 
-## 5. Robustnosť
-- Ošetri prípady, kedy užívateľ nemá vyplnené fakturačné údaje (v takom prípade vystav faktúru na meno/email ako súkromnú osobu).
-- Pridaj logovanie chýb pri komunikácii s API do `storage/error.log`.
+## 5. Logout Security (auth/logout.php)
+- Zabezpeč, aby odhlásenie prebehlo úplne: `$_SESSION = [];`, `session_destroy();` a vymazanie session cookie.
