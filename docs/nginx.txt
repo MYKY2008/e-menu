@@ -1,0 +1,78 @@
+# Nginx Configuration for EMENU (GastroLink QR)
+# Domain: emenu.myky.cz
+# Path: /home/ubuntu/emenu
+
+server {
+    listen 80;
+    server_name emenu.myky.cz;
+    root /home/ubuntu/emenu;
+    index index.php;
+
+    charset utf-8;
+
+    # ── Security Headers ────────────────────────────────────────
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # ── Main Routing ────────────────────────────────────────────
+    location / {
+        # Try real file, then directory, then fall back to index.php
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    # ── Protect Sensitive Files ─────────────────────────────────
+    # Prevents access to the database, environment, and git files
+    location ~ /\.(db|sqlite|env|htaccess|git|sh|bat)$ {
+        deny all;
+    }
+
+    # Specifically protect config.php
+    location = /config.php {
+        deny all;
+    }
+
+    # Deny direct access to storage logs
+    location ^~ /storage/ {
+        deny all;
+    }
+
+    # ── PHP Processing ──────────────────────────────────────────
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        
+        # NOTE: Verify your PHP version (ls /run/php/php*-fpm.sock)
+        # Change php8.2 to php8.3 or your current version if needed
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    # ── Static Asset Caching ────────────────────────────────────
+    location ~* \.(jpg|jpeg|png|gif|webp|svg|ico|css|js)$ {
+        expires 7d;
+        add_header Cache-Control "public, no-transform";
+    }
+
+    # Gzip Compression
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+    # Logging
+    error_log  /var/log/nginx/emenu.error.log;
+    access_log /var/log/nginx/emenu.access.log;
+}
+
+# ──────────────────────────────────────────────────────────────
+# QUICK DEPLOYMENT STEPS:
+# ──────────────────────────────────────────────────────────────
+# 1. Save this to: /etc/nginx/sites-available/emenu.myky.cz
+# 2. Enable it:    sudo ln -s /etc/nginx/sites-available/emenu.myky.cz /etc/nginx/sites-enabled/
+# 3. Test config:  sudo nginx -t
+# 4. Restart:      sudo systemctl restart nginx
+# 5. Permissions:  sudo chown -R www-data:www-data /home/ubuntu/emenu
+#                  sudo chmod -R 755 /home/ubuntu/emenu
+# 6. SSL (Optional but recommended):
+#    sudo certbot --nginx -d emenu.myky.cz
+# ──────────────────────────────────────────────────────────────
