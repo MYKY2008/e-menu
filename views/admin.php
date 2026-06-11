@@ -76,6 +76,17 @@ if (is_file($logFile)) {
     $raw = file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
     $logLines = array_slice($raw, -50);
 }
+
+/* ── System health ──────────────────────────────────────────────── */
+$sysHealth = [
+    ['label' => 'OpenSSL',    'ext' => 'openssl',    'note' => 'Potrebné pre maily a Stripe'],
+    ['label' => 'cURL',       'ext' => 'curl',        'note' => 'Potrebné pre API volania'],
+    ['label' => 'GD',         'ext' => 'gd',          'note' => 'Potrebné pre prácu s obrázkami'],
+    ['label' => 'PDO SQLite', 'ext' => 'pdo_sqlite',  'note' => 'Databáza'],
+];
+foreach ($sysHealth as &$_sh) { $_sh['ok'] = extension_loaded($_sh['ext']); }
+unset($_sh);
+$sysAllOk = !in_array(false, array_column($sysHealth, 'ok'), true);
 ?>
 
 <!-- NAVBAR -->
@@ -311,6 +322,52 @@ if (is_file($logFile)) {
           </div>
         </div>
         <?php endif; ?>
+
+        <!-- ─── Zdravie systému ────────────────────────────────── -->
+        <div class="mt-5 bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Zdravie systému
+              <?php if (!$sysAllOk): ?>
+              <span class="ml-2 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">Problém</span>
+              <?php endif; ?>
+            </p>
+            <a href="<?= url('diagnose') ?>" target="_blank"
+               class="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              Zobraziť diagnostiku
+            </a>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <?php foreach ($sysHealth as $sh): ?>
+            <div class="flex items-start gap-3 px-4 py-3 rounded-2xl
+                        <?= $sh['ok'] ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20' ?>">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5 <?= $sh['ok'] ? 'text-emerald-500' : 'text-red-500' ?>"
+                   fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <?php if ($sh['ok']): ?>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                <?php else: ?>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                <?php endif; ?>
+              </svg>
+              <div>
+                <p class="text-sm font-bold <?= $sh['ok'] ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300' ?>">
+                  <?= e($sh['label']) ?>
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400"><?= e($sh['note']) ?></p>
+                <?php if (!$sh['ok']): ?>
+                <p class="text-[11px] font-semibold text-red-600 dark:text-red-400 mt-1 leading-snug">
+                  Povoľte toto rozšírenie v php.ini a reštartujte server.
+                </p>
+                <?php endif; ?>
+              </div>
+            </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+
       </div><!-- /tab-overview -->
 
       <!-- ─── TAB: UŽÍVATELIA ───────────────────────────────────── -->

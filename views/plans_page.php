@@ -411,8 +411,7 @@ function toast(msg, type = 'info') {
 }
 
 // ── Plan select ───────────────────────────────────────────────────
-const CSRF      = <?= json_encode($csrf) ?>;
-const API_BASE  = <?= json_encode(baseUrl()) ?>;
+const CSRF = <?= json_encode($csrf) ?>;
 
 async function selectPlan(planId) {
   const current   = <?= json_encode($userPlan) ?>;
@@ -440,7 +439,7 @@ async function selectPlan(planId) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Presmerovania…'; }
 
   try {
-    const res = await fetch(API_BASE + '/api/payments/create_session.php', {
+    const res = await fetch('<?= url('api/payments/create_session.php') ?>', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ csrf: CSRF, plan_id: planId }),
@@ -452,8 +451,9 @@ async function selectPlan(planId) {
       toast(data.error || 'Chyba pri inicializácii platby.', 'error');
       if (btn) { btn.disabled = false; btn.textContent = origText; }
     }
-  } catch {
-    toast('Sieťová chyba. Skúste neskôr.', 'error');
+  } catch (error) {
+    console.error('Stripe Fetch Error:', error);
+    toast('Chyba komunikácie so serverom. Skontrolujte konzolu (F12) alebo error.log.', 'error');
     if (btn) { btn.disabled = false; btn.textContent = origText; }
   }
 }

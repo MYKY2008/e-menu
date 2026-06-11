@@ -1,21 +1,24 @@
-# ÚLOHA: Automatické odosielanie faktúr cez SuperFaktura API
+# ÚLOHA: Fix Forbidden chyby a assetov na Localhoste
 
-Cieľom je zabezpečiť, aby po úspešnom vytvorení faktúry bola táto faktúra automaticky odoslaná na e-mail zákazníka priamo zo systému SuperFaktura.
+Cieľom je opraviť bezpečnostnú kontrolu v `index.php`, ktorá na Windowse blokuje prístup k štýlom a skriptom (Forbidden).
 
-## 1. Rozšírenie knižnice (libs/superfaktura.php)
-- Pridaj novú funkciu `sfSendInvoice(int $invoiceId, string $toEmail)`:
-    - Táto funkcia zavolá endpoint `/invoices/send` (alebo ekvivalentný podľa API dokumentácie SuperFaktura).
-    - Parametre v POST požiadavke by mali obsahovať `invoice_id` a `email`.
-    - Zabezpeč správne odoslanie hlavičiek (email a API kľúč).
+## 1. Oprava kontroly v index.php
+- Uprav sekciu `if (PHP_SAPI === 'cli-server')`:
+- Zmeň logiku blokovania `storage/` tak, aby bola odolná voči Windows cestám:
+    ```php
+    $realStorage = str_replace('\\', '/', (string)realpath(BASE_DIR . '/storage'));
+    $realFile    = str_replace('\\', '/', (string)realpath($file));
+    
+    // Blokuj LEN ak ide o priečinok storage a LEN ak realpath uspel
+    if ($realStorage !== '' && $realFile !== '' && str_starts_with($realFile, $realStorage)) {
+        http_response_code(403);
+        die('Access denied to storage.');
+    }
+    ```
+- Zabezpeč, aby sa pred touto kontrolou overilo, či sa užívateľ nepokúša pristúpiť k `assets/` alebo `uploads/`, ktoré musia byť povolené.
 
-## 2. Aktualizácia Webhooku (api/payments/webhook.php)
-- Uprav časť, kde sa spracováva úspešná platba (`checkout.session.completed` / `invoice.paid`):
-    - Po úspešnom vytvorení faktúry pomocou `sfCreateInvoice()` a získaní jej `id`, zavolaj novú funkciu `sfSendInvoice()`.
-    - Ako e-mail príjemcu použi e-mail užívateľa, ktorý platbu vykonal (získaj ho z objektu `$user`).
+## 2. Povolenie statických súborov
+- Uisti sa, že ak je `$file` existujúci súbor a končí na `.css`, `.js`, `.png`, `.jpg`, `.webp`, tak skript vráti `false`, čím povie PHP serveru, aby ho normálne odoslal.
 
-## 3. Ošetrenie chýb
-- Ak odoslanie e-mailu zo SuperFaktury zlyhá, zapíš túto chybu do `gl_log()`, ale neprerušuj beh webhooku (aby platba ostala označená ako úspešná).
-- Pridaj logovaciu správu pri úspešnom odoslaní faktúry (napr. "Faktúra ID: XXX odoslaná na email: YYY").
-
-## 4. Double-check
-- Skontroluj, či sa faktúra odosiela až po tom, čo bola úspešne vytvorená a máme k dispozícii jej ID.
+## 3. Double-check
+- Po tejto zmene by sa po reštarte `run.bat` mala aplikácia zobraziť so správnymi štýlmi.

@@ -51,6 +51,9 @@ define('UPLOADS_DIR',     BASE_DIR . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY
 
 // ── Security headers ──────────────────────────────────────────
 if (!headers_sent()) {
+    // Compute app origin for CSP — baseUrl() is top-level so it's available here.
+    // Avoids CSP connect-src violations when app runs on a custom host/port.
+    $appOrigin = rtrim(baseUrl(), '/');
     header('X-Frame-Options: SAMEORIGIN');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -61,11 +64,12 @@ if (!headers_sent()) {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
         "font-src 'self' https://fonts.gstatic.com; " .
         "img-src 'self' data: blob:; " .
-        "connect-src 'self'; " .
+        "connect-src 'self' " . $appOrigin . " https://api.stripe.com; " .
         "object-src 'none'; " .
         "base-uri 'self'; " .
         "frame-ancestors 'self';"
     );
+    unset($appOrigin);
 }
 
 // ── Database singleton ────────────────────────────────────────
@@ -280,34 +284,24 @@ function purify(mixed $data): mixed {
  * Detects whether the app is installed at root or in a subdirectory
  * by comparing BASE_DIR with the document root.
  */
-function url(string $path = ''): string {
-    static $base = null;
-    if ($base === null) {
-        $docRoot = str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT'] ?? ''));
-        $appDir  = str_replace('\\', '/', realpath(BASE_DIR));
-        if ($docRoot && str_starts_with($appDir, $docRoot)) {
-            $base = rtrim(substr($appDir, strlen($docRoot)), '/');
-        } else {
-            $base = '';
-        }
+function baseUrl(): string {
+    // APP_URL in .env always wins — set it to http://localhost:8080 for local dev.
+    if (!empty($_ENV['APP_URL'])) {
+        return rtrim((string)$_ENV['APP_URL'], '/');
     }
-    return $base . '/' . ltrim($path, '/');
+    $https   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+               || (int)($_SERVER['SERVER_PORT'] ?? 80) === 443;
+    $host    = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $docRoot = str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '');
+    $appDir  = str_replace('\\', '/', realpath(BASE_DIR) ?: '');
+    $subdir  = ($docRoot && str_starts_with($appDir, $docRoot))
+               ? rtrim(substr($appDir, strlen($docRoot)), '/')
+               : '';
+    return ($https ? 'https' : 'http') . '://' . $host . $subdir;
 }
 
-function baseUrl(): string {
-    if (!empty($_ENV['APP_URL'])) return rtrim($_ENV['APP_URL'], '/');
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-             || (($_SERVER['SERVER_PORT'] ?? 80) == 443);
-    $host  = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    return ($https ? 'https' : 'http') . '://' . $host . rtrim(
-        str_replace('\\', '/', realpath(BASE_DIR))
-        ? substr(
-            str_replace('\\', '/', realpath(BASE_DIR)),
-            strlen(str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT'] ?? BASE_DIR)))
-          )
-        : '',
-        '/'
-    );
+function url(string $path = ''): string {
+    return rtrim(baseUrl(), '/') . '/' . ltrim($path, '/');
 }
 
 function asset(string $path): string {
@@ -546,6 +540,12 @@ function sendEmail(string $to, string $subject, string $htmlBody): bool {
     require_once BASE_DIR . '/libs/PHPMailer/src/PHPMailer.php';
     require_once BASE_DIR . '/libs/PHPMailer/src/SMTP.php';
 
+    $smtpSecure = strtolower(trim($_ENV['SMTP_SECURE'] ?? (defined('SMTP_SECURE') ? SMTP_SECURE : '')));
+    if (in_array($smtpSecure, ['tls', 'ssl'], true) && !extension_loaded('openssl')) {
+        gl_log('sendEmail: Chyba: Chýba rozšírenie OpenSSL. Povoľte ho vo vašom php.ini (často v priečinku XAMPP/php/php.ini).');
+        return false;
+    }
+
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
         // ── SMTP — configure via .env or PHP constants ───────
@@ -557,7 +557,7 @@ function sendEmail(string $to, string $subject, string $htmlBody): bool {
         $mail->SMTPSecure = $_ENV['SMTP_SECURE']   ?? (defined('SMTP_SECURE')   ? SMTP_SECURE   : '');
         $mail->SMTPAuth   = $mail->Username !== '';
 
-        $fromEmail = $_ENV['MAIL_FROM']      ?? (defined('MAIL_FROM')      ? MAIL_FROM      : 'noreply@gastrolink.sk');
+        $fromEmail = $_ENV['MAIL_FROM']      ?? (defined('MAIL_FROM')      ? MAIL_FROM      : ('noreply@' . (parse_url(baseUrl(), PHP_URL_HOST) ?: 'localhost')));
         $fromName  = $_ENV['MAIL_FROM_NAME'] ?? (defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'GastroLink QR');
 
         $mail->setFrom($fromEmail, $fromName);
@@ -570,7 +570,12 @@ function sendEmail(string $to, string $subject, string $htmlBody): bool {
         $mail->send();
         return true;
     } catch (\Exception $e) {
-        gl_log('sendEmail error: ' . $e->getMessage());
+        $msg = $e->getMessage();
+        if (stripos($msg, 'openssl') !== false || stripos($msg, ' ssl') !== false) {
+            gl_log('sendEmail: Chyba: Chýba rozšírenie OpenSSL. Povoľte ho vo vašom php.ini (často v priečinku XAMPP/php/php.ini). Pôvodná chyba: ' . $msg);
+        } else {
+            gl_log('sendEmail error: ' . $msg);
+        }
         return false;
     }
 }

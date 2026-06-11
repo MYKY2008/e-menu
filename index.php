@@ -5,23 +5,31 @@ require_once __DIR__ . '/config.php';
 // ── PHP built-in server: serve real files directly ────────────
 if (PHP_SAPI === 'cli-server') {
     $file = __DIR__ . parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
-    // Block direct access to storage/ directory
-    $realStorage = str_replace('\\', '/', realpath(__DIR__ . '/storage') ?: (__DIR__ . '/storage'));
-    $realFile    = str_replace('\\', '/', realpath($file) ?: $file);
-    if (str_starts_with($realFile, $realStorage . '/') || $realFile === $realStorage) {
+
+    // Block direct access to storage/ — only when realpath succeeds for BOTH paths.
+    // Using (string)realpath() gives '' on failure, avoiding false-positive 403s on Windows.
+    $realStorage = str_replace('\\', '/', (string)realpath(BASE_DIR . '/storage'));
+    $realFile    = str_replace('\\', '/', (string)realpath($file));
+    if ($realStorage !== '' && $realFile !== '' && str_starts_with($realFile, $realStorage)) {
         http_response_code(403);
-        exit;
+        die('Access denied to storage.');
     }
+
+    // Serve static assets directly — whitelist safe extensions explicitly.
     if (is_file($file)) {
-        if (pathinfo($file, PATHINFO_EXTENSION) !== 'php') {
-            return false; // serve CSS, JS, images, etc. as-is
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        if (in_array($ext, ['css', 'js', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'svg',
+                             'ico', 'woff', 'woff2', 'ttf', 'otf', 'map'], true)) {
+            return false; // let the built-in server send the file
         }
-        // Execute api/*.php files directly (they bootstrap themselves)
-        $realFile = str_replace('\\', '/', (string)realpath($file));
-        $realApi  = str_replace('\\', '/', (string)realpath(BASE_DIR . '/api'));
-        if ($realApi && str_starts_with($realFile, $realApi . '/')) {
-            require $file;
-            exit;
+        if ($ext === 'php') {
+            // Execute api/*.php files directly (they bootstrap themselves)
+            $realFile = str_replace('\\', '/', (string)realpath($file));
+            $realApi  = str_replace('\\', '/', (string)realpath(BASE_DIR . '/api'));
+            if ($realApi && str_starts_with($realFile, $realApi . '/')) {
+                require $file;
+                exit;
+            }
         }
     }
 }
@@ -117,6 +125,11 @@ switch (true) {
     case $path === '/admin':
         requireAdmin();
         require BASE_DIR . '/views/admin.php';
+        break;
+
+    case $path === '/diagnose':
+        requireAdmin();
+        require BASE_DIR . '/diagnose.php';
         break;
 
     case $path === '/profile':

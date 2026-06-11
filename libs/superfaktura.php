@@ -84,7 +84,6 @@ function sfCreateInvoice(array $order, array $user): ?string {
     ]);
     $response = curl_exec($ch);
     $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     if ($response === false || ($httpCode !== 200 && $httpCode !== 201)) {
         gl_log('SuperFaktura createInvoice HTTP ' . $httpCode . ': ' . (string)$response);
@@ -135,7 +134,6 @@ function sfSendInvoice(int $invoiceId, string $toEmail): bool {
     ]);
     $response = curl_exec($ch);
     $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     if ($response === false || ($httpCode !== 200 && $httpCode !== 201)) {
         gl_log('SuperFaktura sendInvoice HTTP ' . $httpCode . ' id=' . $invoiceId . ': ' . (string)$response);
@@ -172,7 +170,6 @@ function sfGetInvoicePdf(string $invoiceId): ?string {
     ]);
     $detailResp = curl_exec($ch);
     $httpCode   = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     if ($detailResp === false || $httpCode !== 200) {
         gl_log('SuperFaktura getInvoiceDetails HTTP ' . $httpCode . ' id=' . $invoiceId);
@@ -193,7 +190,6 @@ function sfGetInvoicePdf(string $invoiceId): ?string {
     ]);
     $pdf      = curl_exec($ch);
     $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     if ($pdf === false || $httpCode !== 200) {
         gl_log('SuperFaktura getPdf HTTP ' . $httpCode . ' id=' . $invoiceId);
