@@ -117,7 +117,9 @@ try {
             'show_featured'          => 1,
             'default_category_color' => '#1e3a5f',
             'default_item_color'     => '#ffffff',
+            'currency'               => 'EUR',
         ];
+        if (!isset($settings['currency'])) $settings['currency'] = 'EUR';
         return ['categories' => $categories, 'settings' => $settings];
     };
 
@@ -334,16 +336,20 @@ try {
             $itemColor = preg_match('/^#[a-fA-F0-9]{6}$/', $payload['default_item_color'] ?? '')
                          ? $payload['default_item_color'] : '#FFFFFF';
 
+            $currency = in_array($payload['currency'] ?? '', ['EUR', 'CZK'], true)
+                        ? $payload['currency'] : 'EUR';
+
             $db->prepare("
                 INSERT INTO venue_settings
-                    (venue_slug, show_allergens, show_featured, default_category_color, default_item_color)
-                VALUES (?,?,?,?,?)
+                    (venue_slug, show_allergens, show_featured, default_category_color, default_item_color, currency)
+                VALUES (?,?,?,?,?,?)
                 ON CONFLICT(venue_slug) DO UPDATE SET
                     show_allergens=excluded.show_allergens,
                     show_featured=excluded.show_featured,
                     default_category_color=excluded.default_category_color,
-                    default_item_color=excluded.default_item_color
-            ")->execute([$slug, $showAllergens, $showFeatured, $catColor, $itemColor]);
+                    default_item_color=excluded.default_item_color,
+                    currency=excluded.currency
+            ")->execute([$slug, $showAllergens, $showFeatured, $catColor, $itemColor, $currency]);
 
             $touchVenue($slug);
             ob_end_clean();

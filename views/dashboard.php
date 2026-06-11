@@ -2,7 +2,35 @@
 $title     = 'Dashboard — GastroLink QR';
 $robots    = 'noindex, nofollow';
 $extraHead = '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>';
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.unit-pill{display:inline-flex;align-items:center;justify-content:center;
+  padding:.25rem .6rem;border-radius:.625rem;font-size:.75rem;font-weight:700;
+  cursor:pointer;border:2px solid transparent;transition:all .15s;
+  background:#f1f5f9;color:#475569;white-space:nowrap}
+.dark .unit-pill{background:#1e293b;color:#94a3b8}
+.unit-pill:hover{border-color:#818cf8;color:#6366f1}
+.dark .unit-pill:hover{border-color:#818cf8;color:#a5b4fc}
+.unit-pill.active{background:#eef2ff;border-color:#6366f1;color:#4f46e5}
+.dark .unit-pill.active{background:#312e81;border-color:#818cf8;color:#a5b4fc}
+/* ── Custom checkbox ──────────────────────────────────────────── */
+.gl-cb{position:relative;display:inline-flex;width:1rem;height:1rem;flex-shrink:0}
+.gl-cb input{position:absolute;inset:0;opacity:0;cursor:pointer;margin:0;z-index:1}
+.gl-cb-box{
+  width:1rem;height:1rem;border-radius:.3rem;
+  border:2px solid #475569;background:transparent;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s,border-color .15s;pointer-events:none;
+  flex-shrink:0}
+.dark .gl-cb-box{border-color:#475569}
+.gl-cb input:checked~.gl-cb-box{background:#6366f1;border-color:#6366f1}
+.gl-cb-box svg{opacity:0;transition:opacity .1s}
+.gl-cb input:checked~.gl-cb-box svg{opacity:1}
+.gl-cb.amber input:checked~.gl-cb-box{background:#f59e0b;border-color:#f59e0b}
+</style>';
 require __DIR__ . '/partials/header.php';
 ?>
 <body class="bg-gray-50 dark:bg-slate-950 min-h-screen transition-colors duration-200">
@@ -56,6 +84,7 @@ $menuSettings   = [
     'show_featured'          => 1,
     'default_category_color' => '#1E3A5F',
     'default_item_color'     => '#FFFFFF',
+    'currency'               => 'EUR',
 ];
 if ($selected) {
     $catSt = $db->prepare("SELECT * FROM categories WHERE venue_slug = ? ORDER BY sort_order, id");
@@ -458,6 +487,29 @@ $EU_ALLERGENS = [
           </label>
         </div>
 
+        <!-- Currency selector -->
+        <div class="mb-5">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">Mena cien</p>
+          <div class="flex gap-2">
+            <button type="button" id="cur-eur"
+                    onclick="setCurrency('EUR')"
+                    class="flex-1 py-2 rounded-xl text-sm font-bold border-2 transition-all duration-150
+                           <?= ($menuSettings['currency'] ?? 'EUR') === 'EUR'
+                               ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                               : 'border-gray-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300' ?>">
+              € EUR
+            </button>
+            <button type="button" id="cur-czk"
+                    onclick="setCurrency('CZK')"
+                    class="flex-1 py-2 rounded-xl text-sm font-bold border-2 transition-all duration-150
+                           <?= ($menuSettings['currency'] ?? 'EUR') === 'CZK'
+                               ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                               : 'border-gray-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300' ?>">
+              Kč CZK
+            </button>
+          </div>
+        </div>
+
         <!-- Default category theme -->
         <div class="mb-6">
           <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
@@ -777,8 +829,10 @@ $EU_ALLERGENS = [
                         text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
         </div>
         <div>
-          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Cena (€) *</label>
-          <input id="mi-price" type="number" step="0.01" min="0" placeholder="4.50"
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Cena (<span id="mi-currency-label"><?= ($menuSettings['currency'] ?? 'EUR') === 'CZK' ? 'Kč' : '€' ?></span>) *</label>
+          <input id="mi-price" type="text" inputmode="decimal" placeholder="4.50" maxlength="8"
+                 autocomplete="off"
+                 oninput="enforcePriceFormat(this)"
                  class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
                         text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
         </div>
@@ -786,9 +840,21 @@ $EU_ALLERGENS = [
 
       <div>
         <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Gramáž / objem</label>
-        <input id="mi-weight" type="text" placeholder="300 ml, 150 g..."
+        <input id="mi-weight-val" type="number" min="0" max="99999" step="any" placeholder="300"
+               oninput="if(this.value>99999)this.value=99999;if(this.value<0)this.value=0"
                class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm
-                      text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+                      text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200 mb-2">
+        <div class="flex flex-wrap gap-1.5" id="mi-unit-pills">
+          <?php foreach ([''=>'— bez —','g'=>'g','dkg'=>'dkg','kg'=>'kg','ml'=>'ml','dl'=>'dl','l'=>'l','ks'=>'ks','porcia'=>'porcia'] as $uv => $ul): ?>
+          <button type="button" class="unit-pill<?= $uv==='' ? ' active' : '' ?>"
+                  data-unit="<?= $uv ?>"
+                  onclick="setWeightUnit(this,'<?= $uv ?>')">
+            <?= $ul ?>
+          </button>
+          <?php endforeach; ?>
+        </div>
+        <input type="hidden" id="mi-weight-unit" value="">
+        <input type="hidden" id="mi-weight" value="">
       </div>
 
       <div>
@@ -812,20 +878,33 @@ $EU_ALLERGENS = [
       </div>
 
       <label class="flex items-center gap-2.5 cursor-pointer">
-        <input type="checkbox" id="mi-featured" class="w-4 h-4 accent-amber-500">
+        <span class="gl-cb amber">
+          <input type="checkbox" id="mi-featured">
+          <span class="gl-cb-box">
+            <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+              <path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </span>
         <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">⭐ Zobraziť v sekcii "Odporúčame"</span>
       </label>
 
       <!-- Allergens -->
       <div>
         <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 block">Alergény (EU 1–14)</label>
-        <div class="grid grid-cols-2 gap-1.5">
+        <div class="grid grid-cols-2 gap-0.5">
           <?php foreach ($EU_ALLERGENS as $num => $label): ?>
-          <label class="flex items-center gap-1.5 cursor-pointer
-                        px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition">
-            <input type="checkbox" class="mi-allergen w-3.5 h-3.5 accent-indigo-600"
-                   value="<?= $num ?>">
-            <span class="text-xs text-slate-600 dark:text-slate-400"><?= $num ?> – <?= e($label) ?></span>
+          <label class="flex items-center gap-2 cursor-pointer
+                        px-2 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/60 transition">
+            <span class="gl-cb">
+              <input type="checkbox" class="mi-allergen" value="<?= $num ?>">
+              <span class="gl-cb-box">
+                <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                  <path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+            </span>
+            <span class="text-xs text-slate-600 dark:text-slate-400 leading-tight"><?= $num ?> – <?= e($label) ?></span>
           </label>
           <?php endforeach; ?>
         </div>
@@ -984,7 +1063,46 @@ function esc(s) {
     m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 function fmtPrice(p) {
-  return parseFloat(p || 0).toFixed(2).replace('.', ',') + ' €';
+  const cur = menuData.settings?.currency ?? 'EUR';
+  const n = parseFloat(p || 0).toFixed(2).replace('.', ',');
+  return cur === 'CZK' ? n + ' Kč' : n + ' €';
+}
+
+function enforcePriceFormat(el) {
+  // Allow only digits, dot, comma — strip everything else
+  let v = el.value.replace(',', '.').replace(/[^0-9.]/g, '');
+  // Keep only first dot
+  const parts = v.split('.');
+  if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
+  // Cap at 2 decimal places
+  if (parts[1] !== undefined && parts[1].length > 2) {
+    v = parts[0] + '.' + parts[1].slice(0, 2);
+  }
+  // Cap at 99999
+  if (parseFloat(v) > 99999) v = '99999';
+  el.value = v;
+}
+
+function setWeightUnit(btn, unit) {
+  document.querySelectorAll('#mi-unit-pills .unit-pill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('mi-weight-unit').value = unit;
+}
+
+function setCurrency(cur) {
+  menuData.settings['currency'] = cur;
+  // Update selector buttons
+  const isEur = cur === 'EUR';
+  const activeC = 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300';
+  const inactC  = 'border-gray-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300';
+  document.getElementById('cur-eur')?.setAttribute('class',
+    `flex-1 py-2 rounded-xl text-sm font-bold border-2 transition-all duration-150 ${isEur ? activeC : inactC}`);
+  document.getElementById('cur-czk')?.setAttribute('class',
+    `flex-1 py-2 rounded-xl text-sm font-bold border-2 transition-all duration-150 ${!isEur ? activeC : inactC}`);
+  // Update price label in item modal
+  const lbl = document.getElementById('mi-currency-label');
+  if (lbl) lbl.textContent = isEur ? '€' : 'Kč';
+  updatePreview();
 }
 
 // ── Venue color selector ──────────────────────────────────────────
@@ -1268,8 +1386,13 @@ function openItemModal(itemId, catId) {
     itemId ? 'Upraviť jedlo' : 'Nové jedlo';
 
   // Reset
-  ['mi-name','mi-price','mi-weight','mi-desc','mi-detail'].forEach(id =>
+  ['mi-name','mi-price','mi-weight','mi-weight-val','mi-desc','mi-detail'].forEach(id =>
     { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('mi-weight-unit').value = '';
+  // Reset unit pills — activate "— bez —"
+  document.querySelectorAll('#mi-unit-pills .unit-pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.unit === '');
+  });
   document.getElementById('mi-featured').checked = false;
   document.querySelectorAll('.mi-allergen').forEach(cb => cb.checked = false);
   selectItemTheme('');
@@ -1282,9 +1405,21 @@ function openItemModal(itemId, catId) {
       if (item) break;
     }
     if (!item) return;
-    document.getElementById('mi-name').value   = item.name;
-    document.getElementById('mi-price').value  = item.price;
-    document.getElementById('mi-weight').value = item.weight || '';
+    document.getElementById('mi-name').value  = item.name;
+    // Price: show as clean decimal
+    const pv = parseFloat(item.price || 0);
+    document.getElementById('mi-price').value = pv > 0 ? pv.toFixed(2) : '';
+    // Parse weight into number + unit (e.g. "300 g" → val=300, unit=g)
+    const wRaw   = (item.weight || '').trim();
+    const wMatch = wRaw.match(/^(\d+\.?\d*)\s*(porcia|dkg|kg|ml|dl|l|ks|g)$/i);
+    const detectedUnit = wMatch ? wMatch[2].toLowerCase() : '';
+    document.getElementById('mi-weight-val').value   = wMatch ? wMatch[1] : wRaw;
+    document.getElementById('mi-weight-unit').value  = detectedUnit;
+    document.getElementById('mi-weight').value = wRaw;
+    // Activate matching pill
+    document.querySelectorAll('#mi-unit-pills .unit-pill').forEach(b => {
+      b.classList.toggle('active', b.dataset.unit === detectedUnit);
+    });
     document.getElementById('mi-desc').value   = item.description || '';
     document.getElementById('mi-detail').value = item.detail_description || '';
     document.getElementById('mi-featured').checked = !!item.is_featured;
@@ -1308,16 +1443,26 @@ async function saveItemData() {
   const id    = document.getElementById('mi-id').value;
   const catId = document.getElementById('mi-cat-id').value;
   const name  = document.getElementById('mi-name').value.trim();
-  const priceStr = document.getElementById('mi-price').value;
-  const price = parseFloat(priceStr);
+  const priceRaw = document.getElementById('mi-price').value.replace(',', '.');
+  const price    = parseFloat(priceRaw) || 0;
 
-  if (!name)               { toast('Zadajte názov jedla.', 'error'); return; }
-  if (isNaN(price)||price<0) { toast('Zadajte platnú cenu.', 'error'); return; }
+  if (!name)                   { toast('Zadajte názov jedla.', 'error'); return; }
+  if (isNaN(price) || price < 0) { toast('Zadajte platnú cenu (napr. 4.50).', 'error'); return; }
+  if (price > 99999)             { toast('Cena nesmie presiahnuť 99 999.', 'error'); return; }
+  const priceFinal = Math.round(price * 100) / 100;
+
+  const wVal  = (document.getElementById('mi-weight-val')?.value  || '').trim();
+  const wUnit = (document.getElementById('mi-weight-unit')?.value || '').trim();
+  if (wVal !== '' && (isNaN(parseFloat(wVal)) || parseFloat(wVal) > 99999)) {
+    toast('Gramáž / objem nesmie presiahnuť 99 999.', 'error'); return;
+  }
+  const weightStr = wVal ? (wUnit ? wVal + ' ' + wUnit : wVal) : '';
+  document.getElementById('mi-weight').value = weightStr;
 
   const payload = {
     csrf: CSRF, action: 'save_item',
-    name, price,
-    weight:              document.getElementById('mi-weight').value.trim(),
+    name, price: priceFinal,
+    weight:              weightStr,
     description:         document.getElementById('mi-desc').value.trim(),
     detail_description:  document.getElementById('mi-detail').value.trim(),
     is_featured:         document.getElementById('mi-featured').checked ? 1 : 0,
@@ -1355,6 +1500,7 @@ async function saveMenuSettings() {
     show_featured:         document.getElementById('m-show-featured').checked  ? 1 : 0,
     default_category_color: document.getElementById('m-cat-color').value,
     default_item_color:    document.getElementById('m-item-color').value,
+    currency:              menuData.settings['currency'] ?? 'EUR',
   });
   if (data.ok) {
     updatePreview();

@@ -97,7 +97,16 @@ $settings = $ssSt->fetch() ?: [
     'show_featured'          => 1,
     'default_category_color' => '#1E3A5F',
     'default_item_color'     => '#FFFFFF',
+    'currency'               => 'EUR',
 ];
+if (!isset($settings['currency'])) $settings['currency'] = 'EUR';
+
+$venueCurrency = $settings['currency'] === 'CZK' ? 'CZK' : 'EUR';
+$currencySym   = $venueCurrency === 'CZK' ? 'Kč' : '€';
+
+function fmtPr(float|string $price, string $sym): string {
+    return number_format((float)$price, 2, ',', '') . ' ' . $sym;
+}
 
 $accentArr  = resolveColor($venue['color']);
 $accentHex  = $accentArr['hex'];
@@ -408,7 +417,7 @@ $AL = [
           $fbg = $fi['bg_color'] ?: $defItemBg;
           $fbgIsWhite = in_array($fbg, ['#FFFFFF','#FFF8E7','#F2ECD9'], true);
           $ftc = menuTextColor($fbg);
-          $fpr = number_format((float)$fi['price'], 2, ',', '');
+          $fpr = fmtPr((float)$fi['price'], $currencySym);
         ?>
         <button data-item="<?= e(json_encode($fi, JSON_UNESCAPED_UNICODE)) ?>"
                 onclick="openSheet(JSON.parse(this.dataset.item))"
@@ -424,7 +433,7 @@ $AL = [
           </p>
           <span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full
                        bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-gray-100">
-            <?= $fpr ?> €
+            <?= $fpr ?>
           </span>
         </button>
         <?php endforeach; ?>
@@ -502,7 +511,7 @@ $AL = [
           $isWhiteCard = in_array($ibg, ['#FFFFFF', '#FFF8E7', '#F2ECD9'], true);
           $itc  = $isWhiteCard ? '#1f2937' : menuTextColor($ibg);
           $imt  = $isWhiteCard ? '#6b7280' : menuMutedColor($ibg);
-          $ipr  = number_format((float)$item['price'], 2, ',', '');
+          $ipr  = fmtPr((float)$item['price'], $currencySym);
           $algN = array_values(array_unique(array_filter(
               array_map('intval', array_filter(explode(',', (string)($item['allergens'] ?? '')), 'strlen')),
               fn($n) => $n >= 1 && $n <= 14
@@ -566,7 +575,7 @@ $AL = [
                                ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-gray-100'
                                : '' ?>"
                     <?= !$isWhiteCard ? "style=\"background:{$accentHex};color:{$accentText}\"" : '' ?>>
-                <?= $ipr ?> €
+                <?= $ipr ?>
               </span>
             </div>
           </div>
@@ -649,9 +658,14 @@ $AL = [
 </div><!-- /#app -->
 
 <script>
-const AL       = <?= json_encode($AL,          JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-const BASE_URL = <?= json_encode(rtrim(baseUrl(), '/')) ?>;
-const MENU_CATS= <?= json_encode($categories, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const AL          = <?= json_encode($AL,          JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const BASE_URL    = <?= json_encode(rtrim(baseUrl(), '/')) ?>;
+const MENU_CATS   = <?= json_encode($categories, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const VENUE_CUR   = <?= json_encode($currencySym) ?>;
+
+function fmtPrice(p) {
+  return parseFloat(p || 0).toFixed(2).replace('.', ',') + ' ' + VENUE_CUR;
+}
 
 // ── SVG icons ─────────────────────────────────────────────────────
 const SVG_SUN = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
@@ -736,8 +750,7 @@ function openSheet(item) {
   document.getElementById('sheet-name').textContent = item.name;
   const wEl = document.getElementById('sheet-weight');
   item.weight ? (wEl.textContent = item.weight, wEl.classList.remove('hidden')) : wEl.classList.add('hidden');
-  document.getElementById('sheet-price').textContent =
-    parseFloat(item.price || 0).toFixed(2).replace('.', ',') + ' €';
+  document.getElementById('sheet-price').textContent = fmtPrice(item.price);
   const shortDesc = String(item.description        || '').trim();
   const longDesc  = String(item.detail_description || '').trim();
   const sdEl = document.getElementById('sheet-short-desc');
@@ -856,7 +869,6 @@ function doSearch() {
     for (const item of matches) {
       const idx = _srCache.length;
       _srCache.push(item);
-      const price = parseFloat(item.price || 0).toFixed(2).replace('.', ',');
       html += `<button onclick="_openSrItem(${idx})"
                class="w-full text-left bg-white dark:bg-slate-800 rounded-[2rem] p-4
                       shadow-sm border border-gray-100 dark:border-slate-700
@@ -867,7 +879,7 @@ function doSearch() {
             ${item.description ? `<p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">${escHtml(item.description)}</p>` : ''}
           </div>
           <span class="flex-shrink-0 px-3 py-1 rounded-full bg-gray-100 dark:bg-slate-700
-                       text-sm font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">${price} €</span>
+                       text-sm font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">${fmtPrice(item.price)}</span>
         </div>
       </button>`;
     }
