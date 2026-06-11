@@ -69,6 +69,7 @@ if (!(int)($user['is_verified'] ?? 0)) {
 $db->prepare("DELETE FROM login_attempts WHERE ip_address = ?")->execute([$ip]);
 
 session_regenerate_id(true);
+unset($_SESSION['csrf']);
 
 $db->prepare("UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?")
    ->execute([(int)$user['id']]);

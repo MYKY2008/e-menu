@@ -212,43 +212,27 @@ $EU_ALLERGENS = [
       <?php endif; ?>
     </div>
 
-    <?php if ($selected): ?>
-    <?php
-    $ss    = $scanStats[$selected['slug']] ?? [];
-    $total = (int)($ss['total'] ?? 0);
-    $month = (int)($ss['month'] ?? 0);
-    ?>
-    <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-4 border border-gray-100 dark:border-slate-800">
-      <h3 class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-widest mb-3">Analytika</h3>
-      <div class="grid grid-cols-2 gap-2">
-        <div class="bg-gray-50 dark:bg-slate-800 rounded-xl p-3 text-center">
-          <p class="text-xl font-extrabold text-slate-800 dark:text-white"><?= $month ?></p>
-          <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">👁 tento mesiac</p>
-        </div>
-        <div class="bg-gray-50 dark:bg-slate-800 rounded-xl p-3 text-center">
-          <p class="text-xl font-extrabold text-slate-800 dark:text-white"><?= $total ?></p>
-          <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">celkovo</p>
-        </div>
-      </div>
-    </div>
-    <?php endif; ?>
-
   </aside>
 
   <!-- ══ CENTER: Tabs ════════════════════════════════════════════════ -->
   <section class="min-w-0 space-y-3">
 
     <!-- Tab bar (segment control) -->
-    <div class="bg-gray-100 dark:bg-slate-800 rounded-[2rem] p-1.5 flex gap-1 border border-gray-200 dark:border-slate-700">
+    <div class="bg-gray-100 dark:bg-slate-800 rounded-[2rem] p-1.5 grid grid-cols-3 gap-1 border border-gray-200 dark:border-slate-700">
       <button id="tab-btn-settings" onclick="switchTab('settings')"
-              class="flex-1 py-2.5 text-sm font-bold rounded-3xl transition-all duration-200
+              class="py-2.5 text-sm font-bold rounded-3xl transition-all duration-200
                      bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-100 dark:border-slate-700">
         ⚙️ Nastavenia
       </button>
       <button id="tab-btn-menu" onclick="switchTab('menu')"
-              class="flex-1 py-2.5 text-sm font-bold rounded-3xl transition-all duration-200
+              class="py-2.5 text-sm font-bold rounded-3xl transition-all duration-200
                      text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
         🍽️ Jedálny lístok
+      </button>
+      <button id="tab-btn-analytics" onclick="switchTab('analytics')"
+              class="py-2.5 text-sm font-bold rounded-3xl transition-all duration-200
+                     text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+        📊 Analytika
       </button>
     </div>
 
@@ -598,6 +582,45 @@ $EU_ALLERGENS = [
         </div>
       </div>
       <?php endif; ?>
+      <?php endif; ?>
+    </div>
+
+    <!-- ── Tab: Analytics ──────────────────────────────────────────── -->
+    <div id="tab-analytics" class="space-y-4 hidden">
+      <?php if (!$selected): ?>
+      <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-12 text-center border border-gray-100 dark:border-slate-800">
+        <p class="text-4xl mb-3">📊</p>
+        <p class="text-sm text-slate-400">Najprv vytvorte prevádzku v záložke Nastavenia.</p>
+      </div>
+      <?php else: ?>
+      <?php
+      $ss    = $scanStats[$selected['slug']] ?? [];
+      $total = (int)($ss['total'] ?? 0);
+      $month = (int)($ss['month'] ?? 0);
+      ?>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-6 border border-gray-100 dark:border-slate-800 flex flex-col items-center justify-center text-center">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+          </div>
+          <p class="text-5xl font-extrabold text-slate-900 dark:text-white mb-2"><?= $month ?></p>
+          <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">Zobrazenia</p>
+          <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">tento mesiac</p>
+        </div>
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm p-6 border border-gray-100 dark:border-slate-800 flex flex-col items-center justify-center text-center">
+          <div class="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+          </div>
+          <p class="text-5xl font-extrabold text-slate-900 dark:text-white mb-2"><?= $total ?></p>
+          <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">Celkovo</p>
+          <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">od začiatku</p>
+        </div>
+      </div>
       <?php endif; ?>
     </div>
   </section>
@@ -1085,9 +1108,9 @@ function clearItemImage() {
 // ── Tab switching ─────────────────────────────────────────────────
 function switchTab(tab) {
   activeTab = tab;
-  const ACTIVE   = 'flex-1 py-2.5 text-sm font-bold rounded-3xl transition-all duration-200 bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-100 dark:border-slate-700';
-  const INACTIVE = 'flex-1 py-2.5 text-sm font-bold rounded-3xl transition-all duration-200 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200';
-  ['settings', 'menu'].forEach(t => {
+  const ACTIVE   = 'py-2.5 text-sm font-bold rounded-3xl transition-all duration-200 bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm border border-gray-100 dark:border-slate-700';
+  const INACTIVE = 'py-2.5 text-sm font-bold rounded-3xl transition-all duration-200 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200';
+  ['settings', 'menu', 'analytics'].forEach(t => {
     document.getElementById('tab-' + t)?.classList.toggle('hidden', t !== tab);
     const btn = document.getElementById('tab-btn-' + t);
     if (btn) btn.className = t === tab ? ACTIVE : INACTIVE;

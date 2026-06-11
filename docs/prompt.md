@@ -1,41 +1,33 @@
-# TASKS FOR CLAUDE AI — SECURITY HARDENING (FINAL PHASE)
+# TASKS FOR CLAUDE AI — DASHBOARD RESTRUCTURE (ANALYTICS TAB)
 
-Tento prompt obsahuje finálnu sadu bezpečnostných a stabilizačných vylepšení.
+Cieľom je presunúť analytiku z bočného panelu do novej, samostatnej záložky (Tab) v hlavnej časti dashboardu.
 
-## ÚLOHA 1: Mazanie súborov pri reset_menu
-**Súbor:** `api/user_actions.php`
-1. V `case 'reset_menu'` pred vymazaním kategórií z databázy pridaj logiku na vymazanie fyzických súborov (obrázkov jedál).
-2. Použi pomocnú funkciu `deleteVenueFiles($slug)`, ktorú už máme v `config.php`, alebo implementuj podobnú logiku (nájsť všetky jedlá cez JOIN s kategóriami danej prevádzky a pre každé zavolať `deleteImageFile()`).
+## ÚLOHA 1: Úprava Tab Baru
+**Súbor:** `views/dashboard.php`
+1. V sekcii "Tab bar (segment control)" (okolo riadku 220) pridaj tretie tlačidlo: k existujúcim `⚙️ Nastavenia` a `🍽️ Jedálny lístok` pridaj `📊 Analytika`.
+2. Uprav CSS triedy tak, aby sa tri tlačidlá pekne zmestili (použi napr. `grid-cols-3` na rodičovskom kontajneri namiesto `flex`).
+3. Tlačidlo musí mať ID `tab-btn-analytics` a volať `switchTab('analytics')`.
 
-## ÚLOHA 2: CSRF ochrana pre backup.php
-**Súbor:** `api/backup.php`
-1. Pridaj kontrolu CSRF tokenu hneď na začiatku súboru: `if (!csrfValid($_GET['csrf'] ?? '')) { die('CSRF invalid'); }`.
-**Súbor:** `views/admin.php` (alebo kde je odkaz na zálohu)
-2. Uisti sa, že odkaz na stiahnutie zálohy obsahuje `?csrf=<?= csrfToken() ?>`.
+## ÚLOHA 2: Vytvorenie obsahu novej záložky
+**Súbor:** `views/dashboard.php`
+1. Vytvor nový kontajner `<div id="tab-analytics" class="space-y-4 hidden">` (pod ostatnými tabmi).
+2. Presuň doň logiku a HTML z pôvodnej karty "Analytika", ktorá bola v bočnom paneli (`aside`).
+3. **Vylepšenie dizajnu:** Keďže je teraz analytika v hlavnom poli, urob štatistiky vizuálne atraktívnejšie:
+   - Použi dve veľké karty vedľa seba (Zobrazenia tento mesiac vs. Celkovo).
+   - Pridaj k nim ikony a výraznú typografiu podľa Design Systemu.
+   - Ak nie je vybraná žiadna prevádzka, zobraz prázdny stav (rovnako ako pri menu).
 
-## ÚLOHA 3: Zjednotenie API hlavičiek
-**Súbory:** `api/delete_account.php`, `api/change_password.php`, `api/update_profile.php`
-1. Pridaj/uprav hlavičky na začiatku súborov tak, aby boli konzistentné s ostatnými API:
-   - `header('Content-Type: application/json; charset=utf-8');`
-   - `header('X-Content-Type-Options: nosniff');`
-2. Uisti sa, že všetky chybové správy sú vracané ako JSON.
+## ÚLOHA 3: Odstránenie starého prvku
+**Súbor:** `views/dashboard.php`
+1. Odstráň pôvodnú kartu analytiky z bočného panelu (`aside`), aby tam zostal len zoznam prevádzok a tlačidlo na pridanie novej.
 
-## ÚLOHA 4: Validácia dĺžky polí pri importe
-**Súbor:** `api/import_full.php`
-1. Pri spracovaní riadkov CSV pridaj validáciu dĺžky reťazcov (mb_substr):
-   - Názov kategórie: max 100 znakov.
-   - Názov jedla: max 100 znakov.
-   - Popis jedla: max 255 znakov.
-2. Ak je cena neplatná alebo záporná, nastav ju na 0 alebo preskoč danú položku.
-
-## ÚLOHA 5: Robustnejší import (Error handling)
-**Súbor:** `api/import_full.php`
-1. Celú logiku čítania CSV a vkladania do DB zabaľ do `try-catch` bloku.
-2. Ak nastane chyba, vráť JSON s `ok: false` a chybovou správou.
-3. Použi `getDB()->beginTransaction()` a `commit()`, aby sa nestalo, že sa importuje len polovica menu pri chybe uprostred súboru.
+## ÚLOHA 4: Aktualizácia JavaScriptu
+**Súbor:** `views/dashboard.php`
+1. Uprav funkciu `switchTab(tab)` tak, aby korektne spracovávala aj hodnotu `'analytics'`.
+2. Nezabudni na prepínanie aktívnych tried (biely background, tiene, farba textu) na všetkých troch tlačidlách v Tab bare.
 
 ---
 **Postup:**
-- PHP súbory musia mať `declare(strict_types=1);`.
-- Dodržiavaj Design System z `docs/dizajn.md`.
-- Po úpravách otestuj Reset Menu a CSV Import, či fungujú správne.
+- Zachovaj minimalistický dizajn, zaoblené rohy `rounded-[2rem]` a farby `indigo-600` / `slate`.
+- Skontroluj, či prepínanie funguje plynulo.
+- Uisti sa, že ak nie je vybraná žiadna prevádzka, v záložke Analytika sa zobrazí informácia: *"Najprv vytvorte prevádzku v záložke Nastavenia."*

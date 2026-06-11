@@ -143,86 +143,94 @@ try {
         $cover = $rawCover;
     }
 
-    // ── Venue limit check for new venues (non-admin users) ────
-    if ($isNew && $role !== 'admin') {
-        $userRow = $db->prepare("SELECT max_venues FROM users WHERE id = ?");
-        $userRow->execute([$userId]);
-        $limit = (int)($userRow->fetchColumn() ?? 1);
+    // ── New-venue race guard: transaction spans limit check + INSERT ──
+    if ($isNew) $db->beginTransaction();
+    try {
+        // ── Venue limit check for new venues (non-admin users) ────
+        if ($isNew && $role !== 'admin') {
+            $userRow = $db->prepare("SELECT max_venues FROM users WHERE id = ?");
+            $userRow->execute([$userId]);
+            $limit = (int)($userRow->fetchColumn() ?? 1);
 
-        $cnt = $db->prepare("SELECT COUNT(*) FROM venues WHERE user_id = ?");
-        $cnt->execute([$userId]);
-        $count = (int)$cnt->fetchColumn();
+            $cnt = $db->prepare("SELECT COUNT(*) FROM venues WHERE user_id = ?");
+            $cnt->execute([$userId]);
+            $count = (int)$cnt->fetchColumn();
 
-        if ($count >= $limit) {
-            throw new InvalidArgumentException(
-                "Dosiahli ste váš limit {$limit} " . ($limit === 1 ? 'prevádzky' : 'prevádzok')
-                . ". Kontaktujte administrátora pre navýšenie."
-            );
-        }
-    }
-
-    // ── Slug ownership check ───────────────────────────────────
-    $checkSt = $db->prepare("SELECT user_id FROM venues WHERE slug = ?");
-    $checkSt->execute([$slug]);
-    $existing = $checkSt->fetch();
-
-    if ($existing) {
-        $ownerOk = ((int)$existing['user_id'] === $userId) || $role === 'admin';
-        if (!$ownerOk) {
-            throw new InvalidArgumentException("Slug \"$slug\" je už obsadený iným podnikom.");
-        }
-    }
-
-    // ── Perform DB write ──────────────────────────────────────
-    if (!$isNew && $originalSlug !== $slug) {
-        // Slug rename: verify ownership, then UPDATE PK + all FK references
-        $ownCheck = $db->prepare("SELECT user_id FROM venues WHERE slug = ?");
-        $ownCheck->execute([$originalSlug]);
-        $orig = $ownCheck->fetch();
-        if (!$orig || ((int)$orig['user_id'] !== $userId && $role !== 'admin')) {
-            throw new RuntimeException('Prevádzka nebola nájdená.');
-        }
-        // PRAGMA foreign_keys cannot be changed inside a transaction — must go before beginTransaction
-        $db->exec('PRAGMA foreign_keys = OFF');
-        $db->beginTransaction();
-        try {
-            $db->prepare("UPDATE venues
-                SET slug=:slug, name=:name, menu_url=:menu, google_url=:goog,
-                    instagram_url=:insta, color=:color, logo=:logo, cover_image=:cover,
-                    updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
-                WHERE slug=:orig")
-               ->execute([
-                   ':slug'=>$slug, ':name'=>$name, ':menu'=>$menu,
-                   ':goog'=>$goog, ':insta'=>$insta, ':color'=>$color,
-                   ':logo'=>$logo, ':cover'=>$cover, ':orig'=>$originalSlug,
-               ]);
-            foreach (['categories', 'venue_settings', 'scans'] as $tbl) {
-                $db->prepare("UPDATE $tbl SET venue_slug = :new WHERE venue_slug = :old")
-                   ->execute([':new' => $slug, ':old' => $originalSlug]);
+            if ($count >= $limit) {
+                throw new InvalidArgumentException(
+                    "Dosiahli ste váš limit {$limit} " . ($limit === 1 ? 'prevádzky' : 'prevádzok')
+                    . ". Kontaktujte administrátora pre navýšenie."
+                );
             }
-            $db->commit();
-        } catch (Throwable $ex) {
-            $db->rollBack();
-            throw $ex;
-        } finally {
-            $db->exec('PRAGMA foreign_keys = ON');
         }
-    } else {
-        // Upsert (insert new or update same-slug)
-        $ownerId = $isNew ? $userId : (int)($existing['user_id'] ?? $userId);
-        $db->prepare("
-            INSERT INTO venues (slug, user_id, name, menu_url, google_url, instagram_url, color, logo, cover_image)
-            VALUES (:slug, :uid, :name, :menu, :goog, :insta, :color, :logo, :cover)
-            ON CONFLICT(slug) DO UPDATE SET
-                name=excluded.name, menu_url=excluded.menu_url,
-                google_url=excluded.google_url, instagram_url=excluded.instagram_url,
-                color=excluded.color, logo=excluded.logo, cover_image=excluded.cover_image,
-                updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
-        ")->execute([
-            ':slug'=>$slug, ':uid'=>$ownerId, ':name'=>$name,
-            ':menu'=>$menu, ':goog'=>$goog, ':insta'=>$insta,
-            ':color'=>$color, ':logo'=>$logo, ':cover'=>$cover,
-        ]);
+
+        // ── Slug ownership check ───────────────────────────────────
+        $checkSt = $db->prepare("SELECT user_id FROM venues WHERE slug = ?");
+        $checkSt->execute([$slug]);
+        $existing = $checkSt->fetch();
+
+        if ($existing) {
+            $ownerOk = ((int)$existing['user_id'] === $userId) || $role === 'admin';
+            if (!$ownerOk) {
+                throw new InvalidArgumentException("Slug \"$slug\" je už obsadený iným podnikom.");
+            }
+        }
+
+        // ── Perform DB write ──────────────────────────────────────
+        if (!$isNew && $originalSlug !== $slug) {
+            // Slug rename: verify ownership, then UPDATE PK + all FK references
+            $ownCheck = $db->prepare("SELECT user_id FROM venues WHERE slug = ?");
+            $ownCheck->execute([$originalSlug]);
+            $orig = $ownCheck->fetch();
+            if (!$orig || ((int)$orig['user_id'] !== $userId && $role !== 'admin')) {
+                throw new RuntimeException('Prevádzka nebola nájdená.');
+            }
+            // PRAGMA foreign_keys cannot be changed inside a transaction — must go before beginTransaction
+            $db->exec('PRAGMA foreign_keys = OFF');
+            $db->beginTransaction();
+            try {
+                $db->prepare("UPDATE venues
+                    SET slug=:slug, name=:name, menu_url=:menu, google_url=:goog,
+                        instagram_url=:insta, color=:color, logo=:logo, cover_image=:cover,
+                        updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+                    WHERE slug=:orig")
+                   ->execute([
+                       ':slug'=>$slug, ':name'=>$name, ':menu'=>$menu,
+                       ':goog'=>$goog, ':insta'=>$insta, ':color'=>$color,
+                       ':logo'=>$logo, ':cover'=>$cover, ':orig'=>$originalSlug,
+                   ]);
+                foreach (['categories', 'venue_settings', 'scans'] as $tbl) {
+                    $db->prepare("UPDATE $tbl SET venue_slug = :new WHERE venue_slug = :old")
+                       ->execute([':new' => $slug, ':old' => $originalSlug]);
+                }
+                $db->commit();
+            } catch (Throwable $ex) {
+                $db->rollBack();
+                throw $ex;
+            } finally {
+                $db->exec('PRAGMA foreign_keys = ON');
+            }
+        } else {
+            // Upsert (insert new or update same-slug)
+            $ownerId = $isNew ? $userId : (int)($existing['user_id'] ?? $userId);
+            $db->prepare("
+                INSERT INTO venues (slug, user_id, name, menu_url, google_url, instagram_url, color, logo, cover_image)
+                VALUES (:slug, :uid, :name, :menu, :goog, :insta, :color, :logo, :cover)
+                ON CONFLICT(slug) DO UPDATE SET
+                    name=excluded.name, menu_url=excluded.menu_url,
+                    google_url=excluded.google_url, instagram_url=excluded.instagram_url,
+                    color=excluded.color, logo=excluded.logo, cover_image=excluded.cover_image,
+                    updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+            ")->execute([
+                ':slug'=>$slug, ':uid'=>$ownerId, ':name'=>$name,
+                ':menu'=>$menu, ':goog'=>$goog, ':insta'=>$insta,
+                ':color'=>$color, ':logo'=>$logo, ':cover'=>$cover,
+            ]);
+            if ($isNew) $db->commit();
+        }
+    } catch (Throwable $ex) {
+        if ($isNew && $db->inTransaction()) $db->rollBack();
+        throw $ex;
     }
 
     ob_end_clean();

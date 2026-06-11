@@ -27,11 +27,12 @@ $db->prepare("UPDATE users SET is_verified = 1, verify_token = NULL WHERE id = ?
    ->execute([(int)$user['id']]);
 
 session_regenerate_id(true);
+unset($_SESSION['csrf']);
 $_SESSION['user_id']     = (int)$user['id'];
 $_SESSION['username']    = $user['username'];
 $_SESSION['user_role']   = $user['role'];
 $_SESSION['venue_limit'] = (int)$user['venue_limit'];
-$_SESSION['login_ip']    = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+$_SESSION['login_ip']    = getRealIp();
 
 flash('Účet bol úspešne aktivovaný. Vitajte!', 'success');
 $target = ($user['role'] === 'admin') ? url('admin') : url('dashboard');
