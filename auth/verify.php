@@ -12,7 +12,7 @@ if ($token === '') {
 
 $db = getDB();
 $st = $db->prepare(
-    "SELECT id, username, role, venue_limit FROM users WHERE verify_token = ? AND is_verified = 0"
+    "SELECT id, username, role, venue_limit, created_at FROM users WHERE verify_token = ? AND is_verified = 0"
 );
 $st->execute([$token]);
 $user = $st->fetch();
@@ -20,6 +20,15 @@ $user = $st->fetch();
 if (!$user) {
     flash('Aktivačný odkaz je neplatný alebo bol už použitý.', 'error');
     header('Location: ' . url('login'));
+    exit;
+}
+
+// Token expiruje po 1 hodine
+$cutoff = date('Y-m-d\TH:i:s\Z', time() - 3600);
+if (($user['created_at'] ?? '') < $cutoff) {
+    $db->prepare("DELETE FROM users WHERE id = ?")->execute([(int)$user['id']]);
+    flash('Aktivačný odkaz vypršal (platnosť 1 hodina). Zaregistrujte sa prosím znova.', 'error');
+    header('Location: ' . url('register'));
     exit;
 }
 

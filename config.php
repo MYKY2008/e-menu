@@ -142,7 +142,7 @@ function getDB(): PDO {
         "ALTER TABLE items ADD COLUMN image TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN is_verified  INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN verify_token TEXT    DEFAULT NULL",
-        "UPDATE users SET is_verified = 1 WHERE is_verified = 0",
+        "UPDATE users SET is_verified = 1 WHERE is_verified = 0 AND verify_token IS NULL",
         "ALTER TABLE categories ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE items      ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE users      ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'",
@@ -606,8 +606,13 @@ if (!empty($_SESSION['user_id']) && !empty($_SESSION['login_ip']) &&
 // ── Garbage collector (1 % lottery) ──────────────────────────
 if (mt_rand(1, 100) === 1) {
     try {
-        $gcDb = getDB();
+        $gcDb   = getDB();
+        $gcHour = date('Y-m-d\TH:i:s\Z', time() - 3600);
         $gcDb->prepare("DELETE FROM password_resets WHERE expires_at < ?")->execute([time()]);
         $gcDb->prepare("DELETE FROM login_attempts  WHERE timestamp  < ?")->execute([time() - 86400]);
+        // Neoverené účty staršie ako 1 hodina — automaticky zmazať
+        $gcDb->prepare(
+            "DELETE FROM users WHERE is_verified = 0 AND verify_token IS NOT NULL AND created_at < ?"
+        )->execute([$gcHour]);
     } catch (\Throwable $ignored) {}
 }

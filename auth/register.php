@@ -41,6 +41,12 @@ if ($password !== $password2) {
 
 $db = getDB();
 
+// ── Vyčisti expirované neoverené účty (staršie ako 1 hodina) ─────
+// Umožní re-registráciu rovnakého e-mailu ak predchádzajúci účet nevyužil token
+$db->prepare(
+    "DELETE FROM users WHERE is_verified = 0 AND verify_token IS NOT NULL AND created_at < ?"
+)->execute([date('Y-m-d\TH:i:s\Z', time() - 3600)]);
+
 // ── Rate limit: max 3 registration attempts per IP per 15 min ────
 $ip          = getRealIp();
 $now         = time();

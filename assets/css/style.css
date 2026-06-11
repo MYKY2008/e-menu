@@ -2380,14 +2380,6 @@ video {
   color: rgb(148 163 184 / var(--tw-placeholder-opacity, 1));
 }
 
-.accent-amber-500 {
-  accent-color: #f59e0b;
-}
-
-.accent-indigo-600 {
-  accent-color: #4f46e5;
-}
-
 .opacity-40 {
   opacity: 0.4;
 }
