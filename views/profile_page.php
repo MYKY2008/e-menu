@@ -3,6 +3,55 @@ $title  = 'Môj Profil — GastroLink QR';
 $robots = 'noindex, nofollow';
 require __DIR__ . '/partials/header.php';
 ?>
+<style>
+/* ── Custom select ───────────────────────────────────────────────── */
+.gl-cs { position: relative; }
+
+.gl-cs-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  width: 100%; text-align: left; cursor: pointer;
+  background: #f3f4f6; border: none;
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem; line-height: 1.25rem;
+  color: #0f172a;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.dark .gl-cs-btn { background: #1e293b; color: #f1f5f9; }
+.gl-cs-btn:focus { outline: none; box-shadow: 0 0 0 2px #6366f1; }
+
+.gl-cs-arrow {
+  flex-shrink: 0; width: 1rem; height: 1rem;
+  color: #64748b; transition: transform 0.18s ease;
+}
+.dark .gl-cs-arrow { color: #94a3b8; }
+.gl-cs-btn[aria-expanded="true"] .gl-cs-arrow { transform: rotate(180deg); }
+
+.gl-cs-panel {
+  display: none;
+  position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 60;
+  background: #ffffff;
+  border-radius: 0.875rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 12px 28px -4px rgba(0,0,0,0.12), 0 4px 10px -3px rgba(0,0,0,0.07);
+  overflow: hidden;
+}
+.dark .gl-cs-panel { background: #1e293b; border-color: #334155; }
+.gl-cs-panel.open { display: block; }
+
+.gl-cs-option {
+  display: block; width: 100%; text-align: left;
+  padding: 0.6rem 1rem;
+  font-size: 0.875rem; color: #334155;
+  background: transparent; border: none; cursor: pointer;
+  transition: background 0.1s;
+}
+.dark .gl-cs-option { color: #cbd5e1; }
+.gl-cs-option:hover { background: #f1f5f9; }
+.dark .gl-cs-option:hover { background: #334155; }
+.gl-cs-option[aria-selected="true"] { color: #4f46e5; font-weight: 700; }
+.dark .gl-cs-option[aria-selected="true"] { color: #818cf8; }
+</style>
 <body class="bg-gray-50 dark:bg-slate-950 min-h-screen transition-colors duration-200">
 
 <?php
@@ -11,7 +60,7 @@ $userId = (int)$_SESSION['user_id'];
 $email  = (string)($_SESSION['username'] ?? '');
 
 // Load user plan
-$stUser = $db->prepare("SELECT plan_name, max_categories, max_items_per_cat, plan_ends_at, next_plan_name FROM users WHERE id = ?");
+$stUser = $db->prepare("SELECT plan_name, max_categories, max_items_per_cat, plan_ends_at, next_plan_name, company_name, ico, dic, ic_dph, billing_street, billing_city, billing_zip, billing_country FROM users WHERE id = ?");
 $stUser->execute([$userId]);
 $planRow      = $stUser->fetch() ?: [];
 $userPlan     = (string)($planRow['plan_name']        ?: 'free');
@@ -20,6 +69,14 @@ $maxItemsCat  = (int)($planRow['max_items_per_cat']    ?: 5);
 $planEndsAt   = $planRow['plan_ends_at'] ?? null;
 $nextPlanName = $planRow['next_plan_name'] ?? null;
 $isPaidPlan   = in_array($userPlan, ['pro', 'ultra', 'custom'], true);
+$companyName    = (string)($planRow['company_name']    ?? '');
+$ico            = (string)($planRow['ico']            ?? '');
+$dic            = (string)($planRow['dic']            ?? '');
+$icDph          = (string)($planRow['ic_dph']         ?? '');
+$billingStreet  = (string)($planRow['billing_street']  ?? '');
+$billingCity    = (string)($planRow['billing_city']    ?? '');
+$billingZip     = (string)($planRow['billing_zip']     ?? '');
+$billingCountry = (string)($planRow['billing_country'] ?? 'Slovensko');
 $planLabel   = match($userPlan) {
     'pro'    => 'Pro',
     'ultra'  => 'Ultra',
@@ -39,10 +96,20 @@ $stVenueStats = $db->prepare("
 $stVenueStats->execute([$userId]);
 $venueStats = $stVenueStats->fetchAll();
 
+// Load orders history
+$stOrders = $db->prepare(
+    "SELECT plan_name, amount, currency, status, invoice_id, created_at
+     FROM orders WHERE user_id = ? ORDER BY created_at DESC"
+);
+$stOrders->execute([$userId]);
+$orders = $stOrders->fetchAll();
+
 $tabs = [
     ['id' => 'account',  'title' => 'Môj Účet',        'desc'  => 'Zmena e-mailu'],
     ['id' => 'security', 'title' => 'Zabezpečenie',     'desc'  => 'Zmena hesla'],
     ['id' => 'plan',     'title' => 'Môj Plán',         'desc'  => 'Free / Paid limity'],
+    ['id' => 'billing',  'title' => 'Fakturačné údaje', 'desc'  => 'IČO, DIČ, fakturácia'],
+    ['id' => 'invoices', 'title' => 'Faktúry',          'desc'  => 'História platieb'],
     ['id' => 'data',     'title' => 'Import / Export',  'desc'  => 'Záloha a prenos menu'],
     ['id' => 'danger',   'title' => 'Nebezpečná zóna',  'desc'  => 'Zmazanie účtu'],
 ];
@@ -320,6 +387,165 @@ $tabs = [
 
       </div>
 
+      <!-- ── Fakturačné údaje ───────────────────────────────────────────── -->
+      <div id="tab-billing" class="space-y-4 hidden">
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">Firemné a fakturačné údaje</p>
+          <div class="space-y-3 max-w-md">
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Obchodné meno / Názov firmy</label>
+              <input id="bl-company" type="text" value="<?= e($companyName) ?>" placeholder="napr. Reštaurácia Novák s.r.o."
+                     class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                            text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                            focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">IČO</label>
+                <input id="bl-ico" type="text" value="<?= e($ico) ?>" placeholder="napr. 12345678"
+                       class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                              text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                              focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">DIČ</label>
+                <input id="bl-dic" type="text" value="<?= e($dic) ?>" placeholder="napr. 2023456789"
+                       class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                              text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                              focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">
+                IČ DPH <span class="font-normal text-slate-400">(voliteľné)</span>
+              </label>
+              <input id="bl-ic-dph" type="text" value="<?= e($icDph) ?>" placeholder="napr. SK2023456789"
+                     class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                            text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                            focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Ulica a číslo</label>
+              <input id="bl-street" type="text" value="<?= e($billingStreet) ?>" placeholder="napr. Hlavná 12"
+                     class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                            text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                            focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="col-span-2">
+                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Mesto</label>
+                <input id="bl-city" type="text" value="<?= e($billingCity) ?>" placeholder="napr. Žilina"
+                       class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                              text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                              focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">PSČ</label>
+                <input id="bl-zip" type="text" value="<?= e($billingZip) ?>" placeholder="010 01"
+                       class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
+                              text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
+                              focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Krajina</label>
+              <div class="gl-cs" id="cs-country">
+                <button type="button" class="gl-cs-btn" aria-haspopup="listbox" aria-expanded="false"
+                        onclick="glCsToggle('cs-country')">
+                  <span class="gl-cs-label"><?= e($billingCountry ?: 'Slovensko') ?></span>
+                  <svg class="gl-cs-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </button>
+                <div class="gl-cs-panel" role="listbox">
+                  <button type="button" class="gl-cs-option" role="option"
+                          aria-selected="<?= ($billingCountry === '' || $billingCountry === 'Slovensko') ? 'true' : 'false' ?>"
+                          data-value="Slovensko" onclick="glCsSelect('cs-country', this)">Slovensko</button>
+                  <button type="button" class="gl-cs-option" role="option"
+                          aria-selected="<?= $billingCountry === 'Česko' ? 'true' : 'false' ?>"
+                          data-value="Česko" onclick="glCsSelect('cs-country', this)">Česko</button>
+                </div>
+                <input type="hidden" id="bl-country" value="<?= e($billingCountry ?: 'Slovensko') ?>">
+              </div>
+            </div>
+            <button onclick="submitBillingData()"
+              class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold
+                     rounded-2xl transition-all duration-200 active:scale-95">
+              Uložiť fakturačné údaje
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Faktúry ───────────────────────────────────────────────────────── -->
+      <div id="tab-invoices" class="space-y-4 hidden">
+        <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-5">História platieb</p>
+
+          <?php if (empty($orders)): ?>
+          <div class="flex flex-col items-center justify-center py-10 text-center">
+            <span class="text-3xl mb-3">🧾</span>
+            <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">Zatiaľ ste nerealizovali žiadne platby.</p>
+            <a href="<?= url('plans') ?>"
+               class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700
+                      text-white text-xs font-bold rounded-2xl transition active:scale-95">
+              Zobraziť plány
+            </a>
+          </div>
+
+          <?php else: ?>
+          <div class="overflow-x-auto -mx-6 px-6">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b border-gray-100 dark:border-slate-800">
+                  <th class="text-left font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 pb-3 pr-4">Dátum</th>
+                  <th class="text-left font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 pb-3 pr-4">Plán</th>
+                  <th class="text-left font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 pb-3 pr-4">Suma</th>
+                  <th class="text-left font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 pb-3 pr-4">Stav</th>
+                  <th class="text-left font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 pb-3">Akcia</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-50 dark:divide-slate-800/60">
+                <?php foreach ($orders as $order):
+                  $statusLabel = match($order['status']) {
+                      'paid'    => ['text' => 'Zaplatené', 'cls' => 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'],
+                      'failed'  => ['text' => 'Zlyhalo',   'cls' => 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'],
+                      default   => ['text' => 'Čaká',      'cls' => 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'],
+                  };
+                  $planLabel = match($order['plan_name']) { 'pro'=>'Pro','ultra'=>'Ultra','custom'=>'Custom',default=>'Free' };
+                  $date = $order['created_at'] ? date('d. m. Y', strtotime((string)$order['created_at'])) : '—';
+                ?>
+                <tr class="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
+                  <td class="py-3 pr-4 text-slate-600 dark:text-slate-400 whitespace-nowrap"><?= e($date) ?></td>
+                  <td class="py-3 pr-4 font-semibold text-slate-800 dark:text-slate-200"><?= e($planLabel) ?></td>
+                  <td class="py-3 pr-4 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                    <?= $order['amount'] > 0 ? number_format((float)$order['amount'], 2, ',', ' ') . ' ' . e((string)$order['currency']) : '—' ?>
+                  </td>
+                  <td class="py-3 pr-4">
+                    <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold <?= $statusLabel['cls'] ?>">
+                      <?= $statusLabel['text'] ?>
+                    </span>
+                  </td>
+                  <td class="py-3">
+                    <?php if ($order['status'] === 'paid'): ?>
+                    <button class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold"
+                            onclick="toast('PDF faktúry bude dostupné čoskoro.', 'info')" type="button">
+                      Stiahnuť PDF
+                    </button>
+                    <?php else: ?>
+                    <span class="text-slate-300 dark:text-slate-600">—</span>
+                    <?php endif; ?>
+                  </td>
+                </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+          <?php endif; ?>
+
+        </div>
+      </div>
+
       <!-- ── Import / Export ─────────────────────────────────────────────── -->
       <div id="tab-data" class="space-y-4 hidden">
         <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6">
@@ -363,13 +589,24 @@ $tabs = [
             </p>
             <div>
               <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Cieľová prevádzka</label>
-              <select id="import-slug"
-                class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
-                       text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                <?php foreach ($venueStats as $vs): ?>
-                <option value="<?= e($vs['slug']) ?>"><?= e($vs['name']) ?></option>
-                <?php endforeach; ?>
-              </select>
+              <div class="gl-cs" id="cs-import-slug">
+                <button type="button" class="gl-cs-btn" aria-haspopup="listbox" aria-expanded="false"
+                        onclick="glCsToggle('cs-import-slug')">
+                  <span class="gl-cs-label"><?= e(!empty($venueStats) ? $venueStats[0]['name'] : '—') ?></span>
+                  <svg class="gl-cs-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </button>
+                <div class="gl-cs-panel" role="listbox">
+                  <?php foreach ($venueStats as $i => $vs): ?>
+                  <button type="button" class="gl-cs-option" role="option"
+                          aria-selected="<?= $i === 0 ? 'true' : 'false' ?>"
+                          data-value="<?= e($vs['slug']) ?>"
+                          onclick="glCsSelect('cs-import-slug', this)"><?= e($vs['name']) ?></button>
+                  <?php endforeach; ?>
+                </div>
+                <input type="hidden" id="import-slug" value="<?= e(!empty($venueStats) ? $venueStats[0]['slug'] : '') ?>">
+              </div>
             </div>
             <div>
               <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">CSV súbor</label>
@@ -460,8 +697,46 @@ $tabs = [
 <script>
 const CSRF = <?= json_encode(csrfToken()) ?>;
 
+// ── Custom select ─────────────────────────────────────────────────
+function glCsToggle(id) {
+  const wrap  = document.getElementById(id);
+  const panel = wrap.querySelector('.gl-cs-panel');
+  const btn   = wrap.querySelector('.gl-cs-btn');
+  const isOpen = panel.classList.contains('open');
+  glCsCloseAll();
+  if (!isOpen) {
+    panel.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+
+function glCsSelect(id, opt) {
+  const wrap  = document.getElementById(id);
+  const panel = wrap.querySelector('.gl-cs-panel');
+  const btn   = wrap.querySelector('.gl-cs-btn');
+  const label = wrap.querySelector('.gl-cs-label');
+  const input = wrap.querySelector('input[type="hidden"]');
+  wrap.querySelectorAll('.gl-cs-option').forEach(o => o.setAttribute('aria-selected', 'false'));
+  opt.setAttribute('aria-selected', 'true');
+  label.textContent = opt.textContent;
+  input.value = opt.dataset.value;
+  panel.classList.remove('open');
+  btn.setAttribute('aria-expanded', 'false');
+}
+
+function glCsCloseAll() {
+  document.querySelectorAll('.gl-cs-panel.open').forEach(p => {
+    p.classList.remove('open');
+    p.closest('.gl-cs')?.querySelector('.gl-cs-btn')?.setAttribute('aria-expanded', 'false');
+  });
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.gl-cs')) glCsCloseAll();
+});
+
 // ── Tab switching ──────────────────────────────────────────────────
-const TAB_IDS = ['account', 'security', 'plan', 'data', 'danger'];
+const TAB_IDS = ['account', 'security', 'plan', 'billing', 'invoices', 'data', 'danger'];
 function switchTab(id) {
   TAB_IDS.forEach(t => {
     document.getElementById('tab-' + t)?.classList.toggle('hidden', t !== id);
@@ -554,6 +829,34 @@ async function submitDeleteAccount() {
     const data = await res.json();
     if (data.ok) {
       window.location.href = <?= json_encode(url('login')) ?>;
+    } else {
+      toast(data.error || 'Chyba.', 'error');
+    }
+  } catch { toast('Sieťová chyba.', 'error'); }
+}
+
+// ── Billing data ──────────────────────────────────────────────────
+async function submitBillingData() {
+  const company = (document.getElementById('bl-company')?.value  || '').trim();
+  const ico     = (document.getElementById('bl-ico')?.value      || '').trim();
+  const dic     = (document.getElementById('bl-dic')?.value      || '').trim();
+  const icDph   = (document.getElementById('bl-ic-dph')?.value   || '').trim();
+  const street  = (document.getElementById('bl-street')?.value   || '').trim();
+  const city    = (document.getElementById('bl-city')?.value     || '').trim();
+  const zip     = (document.getElementById('bl-zip')?.value      || '').trim();
+  const country = (document.getElementById('bl-country')?.value  || '').trim();
+  try {
+    const res = await fetchWithTimeout(<?= json_encode(url('api/update_profile.php')) ?>, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        csrf: CSRF, action: 'billing',
+        company_name: company, ico, dic, ic_dph: icDph,
+        street, city, zip, country
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast('Fakturačné údaje boli uložené.', 'success');
     } else {
       toast(data.error || 'Chyba.', 'error');
     }

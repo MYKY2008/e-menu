@@ -1,33 +1,30 @@
-# TASKS FOR CLAUDE AI — DASHBOARD RESTRUCTURE (ANALYTICS TAB)
+# ÚLOHA: Implementácia fakturácie (Fáza 2 - SuperFaktura & PDF)
 
-Cieľom je presunúť analytiku z bočného panelu do novej, samostatnej záložky (Tab) v hlavnej časti dashboardu.
+Cieľom je automatizovať vystavovanie faktúr po úspešnej platbe a umožniť užívateľom ich sťahovanie.
 
-## ÚLOHA 1: Úprava Tab Baru
-**Súbor:** `views/dashboard.php`
-1. V sekcii "Tab bar (segment control)" (okolo riadku 220) pridaj tretie tlačidlo: k existujúcim `⚙️ Nastavenia` a `🍽️ Jedálny lístok` pridaj `📊 Analytika`.
-2. Uprav CSS triedy tak, aby sa tri tlačidlá pekne zmestili (použi napr. `grid-cols-3` na rodičovskom kontajneri namiesto `flex`).
-3. Tlačidlo musí mať ID `tab-btn-analytics` a volať `switchTab('analytics')`.
+## 1. SuperFaktura API Integrácia
+- Vytvor pomocnú triedu alebo sadu funkcií (napr. v `libs/superfaktura.php`) na komunikáciu so SuperFaktura API.
+- Vyžaduje premenné v `.env`: `SF_EMAIL`, `SF_API_KEY`, `SF_COMPANY_ID`.
+- Implementuj funkciu na vytvorenie faktúry (regular invoice) na základe údajov o užívateľovi (IČO, DIČ, adresa) a objednávke.
 
-## ÚLOHA 2: Vytvorenie obsahu novej záložky
-**Súbor:** `views/dashboard.php`
-1. Vytvor nový kontajner `<div id="tab-analytics" class="space-y-4 hidden">` (pod ostatnými tabmi).
-2. Presuň doň logiku a HTML z pôvodnej karty "Analytika", ktorá bola v bočnom paneli (`aside`).
-3. **Vylepšenie dizajnu:** Keďže je teraz analytika v hlavnom poli, urob štatistiky vizuálne atraktívnejšie:
-   - Použi dve veľké karty vedľa seba (Zobrazenia tento mesiac vs. Celkovo).
-   - Pridaj k nim ikony a výraznú typografiu podľa Design Systemu.
-   - Ak nie je vybraná žiadna prevádzka, zobraz prázdny stav (rovnako ako pri menu).
+## 2. Webhook Update (api/payments/webhook.php)
+- Uprav spracovanie eventu `checkout.session.completed` a `invoice.paid`:
+    - Po úspešnom zápise platby do DB zavolaj SuperFaktura API.
+    - Odošli firemné údaje užívateľa (`company_name`, `ico`, `dic`, atď.) do SuperFaktury.
+    - Získané `invoice_id` (zo SuperFaktury) ulož do tabuľky `orders` v stĺpci `invoice_id`.
 
-## ÚLOHA 3: Odstránenie starého prvku
-**Súbor:** `views/dashboard.php`
-1. Odstráň pôvodnú kartu analytiky z bočného panelu (`aside`), aby tam zostal len zoznam prevádzok a tlačidlo na pridanie novej.
+## 3. Sťahovanie PDF (api/payments/download_invoice.php)
+- Vytvor nový endpoint, ktorý:
+    - Overí, či je užívateľ prihlásený a či mu daná objednávka patrí.
+    - Načíta `invoice_id` z tabuľky `orders`.
+    - Vyžiada PDF dokument zo SuperFaktura API.
+    - Vráti PDF súbor priamo do prehliadača užívateľa so správnymi hlavičkami (`Content-Type: application/pdf`).
 
-## ÚLOHA 4: Aktualizácia JavaScriptu
-**Súbor:** `views/dashboard.php`
-1. Uprav funkciu `switchTab(tab)` tak, aby korektne spracovávala aj hodnotu `'analytics'`.
-2. Nezabudni na prepínanie aktívnych tried (biely background, tiene, farba textu) na všetkých troch tlačidlách v Tab bare.
+## 4. UI Profil (views/profile_page.php)
+- V záložke **"Faktúry"** sprevádzkuj tlačidlo "Stiahnuť PDF".
+- Tlačidlo by malo smerovať na `api/payments/download_invoice.php?order_id=XXX`.
+- Ak `invoice_id` v DB chýba (faktúra sa ešte negenerovala), tlačidlo deaktivuj alebo zobraz informáciu "Spracováva sa".
 
----
-**Postup:**
-- Zachovaj minimalistický dizajn, zaoblené rohy `rounded-[2rem]` a farby `indigo-600` / `slate`.
-- Skontroluj, či prepínanie funguje plynulo.
-- Uisti sa, že ak nie je vybraná žiadna prevádzka, v záložke Analytika sa zobrazí informácia: *"Najprv vytvorte prevádzku v záložke Nastavenia."*
+## 5. Robustnosť
+- Ošetri prípady, kedy užívateľ nemá vyplnené fakturačné údaje (v takom prípade vystav faktúru na meno/email ako súkromnú osobu).
+- Pridaj logovanie chýb pri komunikácii s API do `storage/error.log`.

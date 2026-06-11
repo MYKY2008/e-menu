@@ -81,7 +81,14 @@ function getDB(): PDO {
             created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
             plan_ends_at      TEXT    DEFAULT NULL,
             next_plan_name    TEXT    DEFAULT NULL,
-            last_login_at     TEXT    DEFAULT NULL
+            last_login_at     TEXT    DEFAULT NULL,
+            company_name      TEXT    DEFAULT NULL,
+            ico               TEXT    DEFAULT NULL,
+            dic               TEXT    DEFAULT NULL,
+            ic_dph            TEXT    DEFAULT NULL,
+            billing_address         TEXT    DEFAULT NULL,
+            stripe_customer_id      TEXT    DEFAULT NULL,
+            stripe_subscription_id  TEXT    DEFAULT NULL
         )
     ");
     $pdo->exec("
@@ -125,6 +132,17 @@ function getDB(): PDO {
         "ALTER TABLE users ADD COLUMN plan_ends_at TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN next_plan_name TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN last_login_at TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN company_name TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN ico TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN dic TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN ic_dph TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN billing_address TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN billing_street TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN billing_city TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN billing_zip TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN billing_country TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN stripe_customer_id TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT DEFAULT NULL",
     ];
     foreach ($migrations as $sql) {
         try { $pdo->exec($sql); } catch (PDOException $ignored) {}
@@ -187,6 +205,18 @@ function getDB(): PDO {
         email      TEXT    NOT NULL,
         token      TEXT    NOT NULL,
         expires_at INTEGER NOT NULL
+    )");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS orders (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        stripe_session_id TEXT    DEFAULT NULL,
+        plan_name         TEXT    NOT NULL DEFAULT 'pro',
+        amount            REAL    NOT NULL DEFAULT 0,
+        currency          TEXT    NOT NULL DEFAULT 'EUR',
+        status            TEXT    NOT NULL DEFAULT 'pending',
+        invoice_id        TEXT    DEFAULT NULL,
+        created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
     )");
 
     return $pdo;

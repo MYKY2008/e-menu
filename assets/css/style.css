@@ -716,9 +716,18 @@ video {
   z-index: 60;
 }
 
+.col-span-2 {
+  grid-column: span 2 / span 2;
+}
+
 .-mx-5 {
   margin-left: -1.25rem;
   margin-right: -1.25rem;
+}
+
+.-mx-6 {
+  margin-left: -1.5rem;
+  margin-right: -1.5rem;
 }
 
 .mx-auto {
@@ -1250,6 +1259,11 @@ video {
 .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
   --tw-divide-opacity: 1;
   border-color: rgb(243 244 246 / var(--tw-divide-opacity, 1));
+}
+
+.divide-gray-50 > :not([hidden]) ~ :not([hidden]) {
+  --tw-divide-opacity: 1;
+  border-color: rgb(249 250 251 / var(--tw-divide-opacity, 1));
 }
 
 .self-start {
@@ -2940,6 +2954,10 @@ video {
   border-color: rgb(30 41 59 / var(--tw-divide-opacity, 1));
 }
 
+.dark\:divide-slate-800\/60:is(.dark *) > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(30 41 59 / 0.6);
+}
+
 .dark\:border-amber-800\/40:is(.dark *) {
   border-color: rgb(146 64 14 / 0.4);
 }
@@ -3297,6 +3315,10 @@ video {
 .dark\:hover\:bg-slate-800:hover:is(.dark *) {
   --tw-bg-opacity: 1;
   background-color: rgb(30 41 59 / var(--tw-bg-opacity, 1));
+}
+
+.dark\:hover\:bg-slate-800\/30:hover:is(.dark *) {
+  background-color: rgb(30 41 59 / 0.3);
 }
 
 .dark\:hover\:bg-slate-800\/50:hover:is(.dark *) {

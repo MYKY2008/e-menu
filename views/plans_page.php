@@ -14,6 +14,7 @@ $planRow      = $stUser->fetch() ?: [];
 $userPlan     = (string)($planRow['plan_name'] ?: 'free');
 $planEndsAt   = $planRow['plan_ends_at']  ?? null;
 $nextPlanName = $planRow['next_plan_name'] ?? null;
+$csrf         = csrfToken();
 ?>
 
 <style>
@@ -140,7 +141,7 @@ $nextPlanName = $planRow['next_plan_name'] ?? null;
   <!-- Header -->
   <div class="text-center mb-10">
     <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white mb-2">Vyberte si váš plán</h1>
-    <p class="text-sm text-slate-500 dark:text-slate-400">Všetky ceny sú vrátane DPH 23 %</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400">Ceny sú uvedené bez DPH</p>
   </div>
 
   <?php if ($nextPlanName !== null): ?>
@@ -270,8 +271,8 @@ $nextPlanName = $planRow['next_plan_name'] ?? null;
         <p class="text-sm text-slate-500 dark:text-slate-400">Nastavte si presne to, čo potrebujete.</p>
       </div>
       <div class="text-right">
-        <div class="text-4xl font-extrabold text-violet-600 dark:text-violet-400 transition-all duration-200" id="custom-price">10,33 €</div>
-        <div class="text-xs text-slate-400 mt-0.5">mesačne s DPH</div>
+        <div class="text-4xl font-extrabold text-violet-600 dark:text-violet-400 transition-all duration-200" id="custom-price">8,40 €</div>
+        <div class="text-xs text-slate-400 mt-0.5">mesačne bez DPH</div>
       </div>
     </div>
 
@@ -381,12 +382,8 @@ $nextPlanName = $planRow['next_plan_name'] ?? null;
           <span class="font-semibold text-slate-700 dark:text-slate-300" id="breakdown-items-val">0,60 €</span>
         </div>
         <div class="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-2 mt-1">
-          <span class="font-semibold text-slate-700 dark:text-slate-300">Celkom bez DPH</span>
-          <span class="font-bold text-slate-800 dark:text-slate-200" id="breakdown-subtotal">8,40 €</span>
-        </div>
-        <div class="flex justify-between text-violet-600 dark:text-violet-400 font-medium">
-          <span>DPH 23 %</span>
-          <span id="breakdown-vat">1,93 €</span>
+          <span class="font-semibold text-violet-600 dark:text-violet-400">Celková cena bez DPH</span>
+          <span class="font-bold text-violet-600 dark:text-violet-400" id="breakdown-subtotal">8,40 €</span>
         </div>
       </div>
     </div>
@@ -414,19 +411,50 @@ function toast(msg, type = 'info') {
 }
 
 // ── Plan select ───────────────────────────────────────────────────
-function selectPlan(planId) {
-  const current  = <?= json_encode($userPlan) ?>;
-  const endsAt   = <?= json_encode($planEndsAt) ?>;
+const CSRF      = <?= json_encode($csrf) ?>;
+const API_BASE  = <?= json_encode(baseUrl()) ?>;
+
+async function selectPlan(planId) {
+  const current   = <?= json_encode($userPlan) ?>;
+  const endsAt    = <?= json_encode($planEndsAt) ?>;
   const planOrder = { free: 0, pro: 1, ultra: 2, custom: 3 };
   if (planId === current) return;
 
+  // Downgrade — spravuje profil
   const isDowngrade = (planOrder[planId] ?? 0) < (planOrder[current] ?? 0);
-
   if (isDowngrade && endsAt) {
     const date = new Date(endsAt).toLocaleDateString('sk-SK');
-    toast(`Downgrade na ${planId} sa aktivuje po uplynutí predplatného (${date}). Kontaktujte info@gastrolink.sk.`, 'info');
-  } else {
-    toast('Kontaktujte nás na info@gastrolink.sk pre aktiváciu plánu.', 'info');
+    toast(`Zmenu plánu môžete spravovať v profile. Downgrade sa aktivuje po uplynutí predplatného (${date}).`, 'info');
+    return;
+  }
+
+  // Free plán — len info
+  if (planId === 'free') {
+    toast('Prejdite do profilu a zrušte predplatné pre prechod na Free.', 'info');
+    return;
+  }
+
+  // Platené plány — Stripe Checkout
+  const btn = document.querySelector(`button[onclick="selectPlan('${planId}')"]`);
+  const origText = btn?.textContent ?? '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Presmerovania…'; }
+
+  try {
+    const res = await fetch(API_BASE + '/api/payments/create_session.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csrf: CSRF, plan_id: planId }),
+    });
+    const data = await res.json();
+    if (data.ok && data.url) {
+      window.location.href = data.url;
+    } else {
+      toast(data.error || 'Chyba pri inicializácii platby.', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+    }
+  } catch {
+    toast('Sieťová chyba. Skúste neskôr.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
   }
 }
 
@@ -452,7 +480,7 @@ function fmt(n) {
 }
 
 // ── Custom price calculator ───────────────────────────────────────
-// Coefficients (bez DPH): base=5€, venue=2€, cat=0.20€, item=0.10€; DPH=23%
+// Coefficients (bez DPH): base=5€, venue=2€, cat=0.20€, item=0.10€
 function updateCustomPrice() {
   const sV = document.getElementById('slider-venues');
   const sC = document.getElementById('slider-cats');
@@ -475,10 +503,8 @@ function updateCustomPrice() {
   const itemCost  = items  * 0.10;
   const base      = 5.00;
   const subtotal  = base + venueCost + catCost + itemCost;
-  const vat       = subtotal * 0.23;
-  const total     = subtotal * 1.23;
 
-  document.getElementById('custom-price').textContent         = fmt(total);
+  document.getElementById('custom-price').textContent         = fmt(subtotal);
   document.getElementById('breakdown-venues').textContent     = `Prevádzky (${venues} × 2,00 €)`;
   document.getElementById('breakdown-venues-val').textContent = fmt(venueCost);
   document.getElementById('breakdown-cats').textContent       = `Kategórie (${cats} × 0,20 €)`;
@@ -486,7 +512,6 @@ function updateCustomPrice() {
   document.getElementById('breakdown-items').textContent      = `Jedlá (${items} × 0,10 €)`;
   document.getElementById('breakdown-items-val').textContent  = fmt(itemCost);
   document.getElementById('breakdown-subtotal').textContent   = fmt(subtotal);
-  document.getElementById('breakdown-vat').textContent        = fmt(vat);
 }
 
 // Init
