@@ -1,44 +1,41 @@
-# PROMPT: Fix - Striktne odložené zrušenie predplatného
+# TASKS FOR CLAUDE AI — SECURITY HARDENING (FINAL PHASE)
 
-**CIEĽ:** Odstrániť "šedú zónu" pri zrušení predplatného. Zrušenie NESMIE nikdy mazať dáta okamžite, ak má užívateľ aktívne obdobie. Musí iba nastaviť dátum zániku.
+Tento prompt obsahuje finálnu sadu bezpečnostných a stabilizačných vylepšení.
 
----
+## ÚLOHA 1: Mazanie súborov pri reset_menu
+**Súbor:** `api/user_actions.php`
+1. V `case 'reset_menu'` pred vymazaním kategórií z databázy pridaj logiku na vymazanie fyzických súborov (obrázkov jedál).
+2. Použi pomocnú funkciu `deleteVenueFiles($slug)`, ktorú už máme v `config.php`, alebo implementuj podobnú logiku (nájsť všetky jedlá cez JOIN s kategóriami danej prevádzky a pre každé zavolať `deleteImageFile()`).
 
-### 🛠️ ÚLOHA 1: Úprava API pre zrušenie
-**Súbor:** `api/user_actions.php` (akcia `cancel_plan`)
-**Inštrukcie:**
-1. **Úplne odstráň** akúkoľvek logiku, ktorá volá `DELETE FROM categories` v rámci akcie `cancel_plan`.
-2. **Logika:** 
-   - Ak `plan_ends_at` je v budúcnosti -> **IBA** nastav `next_plan_name = 'free'`. Nič viac. Vráť úspešnú odpoveď s informáciou o dátume expirácie.
-   - Ak `plan_ends_at` je v minulosti alebo NULL (napr. testovací účet bez dátumu) -> Nastav `plan_name = 'free'` a základné limity (1/3/5), ale **STÁLE NEMRAŽ DÁTA**. Dáta sa mazať nesmú v tomto kroku nikdy.
+## ÚLOHA 2: CSRF ochrana pre backup.php
+**Súbor:** `api/backup.php`
+1. Pridaj kontrolu CSRF tokenu hneď na začiatku súboru: `if (!csrfValid($_GET['csrf'] ?? '')) { die('CSRF invalid'); }`.
+**Súbor:** `views/admin.php` (alebo kde je odkaz na zálohu)
+2. Uisti sa, že odkaz na stiahnutie zálohy obsahuje `?csrf=<?= csrfToken() ?>`.
 
----
+## ÚLOHA 3: Zjednotenie API hlavičiek
+**Súbory:** `api/delete_account.php`, `api/change_password.php`, `api/update_profile.php`
+1. Pridaj/uprav hlavičky na začiatku súborov tak, aby boli konzistentné s ostatnými API:
+   - `header('Content-Type: application/json; charset=utf-8');`
+   - `header('X-Content-Type-Options: nosniff');`
+2. Uisti sa, že všetky chybové správy sú vracané ako JSON.
 
-### 🛠️ ÚLOHA 2: Úprava UI v Profile
-**Súbor:** `views/profile_page.php` (funkcia `cancelPlanWithExport` a modál)
-**Inštrukcie:**
-1. **Zmena textov:** Modál na zrušenie už nesmie strašiť okamžitým mazaním dát. 
-   - Text: "Chcete zrušiť automatické obnovovanie predplatného? Váš prístup zostane zachovaný do [Dátum]."
-2. **Odstránenie Exportu:** Pri obyčajnom zrušení obnovy (Cancellation) nie je potrebný povinný export ani sťahovanie CSV. Odstráň volanie `api/export_full.php` z tejto funkcie.
-3. **Akcia:** Tlačidlo v modále premenuj na "Potvrdiť zrušenie obnovy". Po kliknutí zavolaj API a po úspechu reštartuj stránku.
+## ÚLOHA 4: Validácia dĺžky polí pri importe
+**Súbor:** `api/import_full.php`
+1. Pri spracovaní riadkov CSV pridaj validáciu dĺžky reťazcov (mb_substr):
+   - Názov kategórie: max 100 znakov.
+   - Názov jedla: max 100 znakov.
+   - Popis jedla: max 255 znakov.
+2. Ak je cena neplatná alebo záporná, nastav ju na 0 alebo preskoč danú položku.
 
----
-
-### 🛠️ ÚLOHA 3: Jediné miesto pre mazanie dát (Lockdown v Dashboarde)
-**Súbor:** `views/dashboard.php`
-**Inštrukcie:**
-1. **Len tu je povolený reset:** Mazanie dát (s povinnou zálohou) je povolené **IBA** vtedy, keď je dashboard v stave **Lockdown** (t.j. už nastal moment expirácie a užívateľ má v DB viac dát, než povoľuje jeho nový Free/nižší plán).
-2. Tlačidlo v Lockdown karte "Zresetovať menu podľa limitov" (ktoré volá `reset_menu`) je jediné miesto, ktoré reálne maže kategórie a jedlá po stiahnutí CSV.
-
----
-
-### 🎨 Kontrola logiky:
-1. Užívateľ má Ultra, klikne "Zrušiť".
-2. **Výsledok:** Stále má Ultra, v DB je zapísané, že po 30.6. bude Free. Žiadne CSV sa nesťahuje, nič sa nemaže.
-3. Nastane 1.7. -> Systém ho automaticky prepne na Free (vďaka `applyPlanTransitionIfNeeded`).
-4. Užívateľ má v DB stále 50 jedál, ale limit je 5.
-5. **Výsledok:** Dashboard sa uzamkne (Lockdown).
-6. Užívateľ klikne "Resetovať", stiahne CSV a až teraz systém zmaže menu.
+## ÚLOHA 5: Robustnejší import (Error handling)
+**Súbor:** `api/import_full.php`
+1. Celú logiku čítania CSV a vkladania do DB zabaľ do `try-catch` bloku.
+2. Ak nastane chyba, vráť JSON s `ok: false` a chybovou správou.
+3. Použi `getDB()->beginTransaction()` a `commit()`, aby sa nestalo, že sa importuje len polovica menu pri chybe uprostred súboru.
 
 ---
-**VÝSTUP:** Opravené súbory `api/user_actions.php`, `views/profile_page.php` a `views/dashboard.php`.
+**Postup:**
+- PHP súbory musia mať `declare(strict_types=1);`.
+- Dodržiavaj Design System z `docs/dizajn.md`.
+- Po úpravách otestuj Reset Menu a CSV Import, či fungujú správne.

@@ -19,6 +19,15 @@ try {
     // Purify text fields; preserve raw image data — it is validated by saveImageFile()
     $rawLogo  = $payload['logo']        ?? null;
     $rawCover = $payload['cover_image'] ?? null;
+
+    // Early size pre-check before any processing to save memory
+    if (is_string($rawLogo)  && strlen($rawLogo)  > (int)(MAX_LOGO_BYTES  * 1.4)) {
+        throw new InvalidArgumentException('Logo je príliš veľké (max. 512 KB).');
+    }
+    if (is_string($rawCover) && strlen($rawCover) > (int)(MAX_COVER_BYTES * 1.4)) {
+        throw new InvalidArgumentException('Cover fotka je príliš veľká (max. 1 MB).');
+    }
+
     $payload  = purify($payload);
     $payload['logo']        = $rawLogo;
     $payload['cover_image'] = $rawCover;

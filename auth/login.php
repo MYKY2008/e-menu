@@ -24,7 +24,7 @@ if ($username === '' || $password === '') {
 }
 
 $db  = getDB();
-$ip  = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+$ip  = getRealIp();
 $now = time();
 $windowStart = $now - 900; // 15 minutes
 
@@ -77,7 +77,7 @@ $_SESSION['user_id']     = (int)$user['id'];
 $_SESSION['username']    = $user['username'];
 $_SESSION['user_role']   = $user['role'];
 $_SESSION['venue_limit'] = (int)$user['venue_limit'];
-$_SESSION['login_ip']    = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+$_SESSION['login_ip']    = getRealIp();
 
 $target = ($user['role'] === 'admin') ? url('admin') : url('dashboard');
 header('Location: ' . $target);

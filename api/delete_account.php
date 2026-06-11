@@ -2,9 +2,11 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../config.php';
 
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
 
 if (!isLoggedIn()) {
+    http_response_code(401);
     echo json_encode(['ok' => false, 'error' => 'Nie ste prihlásený.']);
     exit;
 }

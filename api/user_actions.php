@@ -70,6 +70,16 @@ try {
             if (!$vRow || (int)$vRow['user_id'] !== $userId) {
                 throw new RuntimeException('Prístup zamietnutý.');
             }
+            // Delete physical image files before removing DB records
+            $imgSt = $db->prepare(
+                "SELECT i.image FROM items i
+                 JOIN categories c ON c.id = i.category_id
+                 WHERE c.venue_slug = ? AND i.image IS NOT NULL"
+            );
+            $imgSt->execute([$slug]);
+            foreach ($imgSt->fetchAll() as $row) {
+                deleteImageFile($row['image']);
+            }
             $db->prepare("DELETE FROM categories WHERE venue_slug = ?")
                ->execute([$slug]);
             ob_end_clean();

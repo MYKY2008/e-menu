@@ -334,12 +334,16 @@ $tabs = [
               <?php foreach ($venueStats as $vs): ?>
               <div class="flex items-center justify-between py-2.5 px-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl">
                 <span class="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate mr-3">📍 <?= e($vs['name']) ?></span>
-                <a href="<?= url('api/export_full.php') ?>?slug=<?= urlencode($vs['slug']) ?>&csrf=<?= urlencode(csrfToken()) ?>"
-                   class="flex-shrink-0 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100
-                          dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400
-                          text-xs font-bold rounded-xl transition">
-                  Stiahnuť CSV
-                </a>
+                <form method="POST" action="<?= url('api/export_full.php') ?>" class="flex-shrink-0">
+                  <input type="hidden" name="csrf" value="<?= csrfToken() ?>">
+                  <input type="hidden" name="slug" value="<?= e($vs['slug']) ?>">
+                  <button type="submit"
+                          class="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100
+                                 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400
+                                 text-xs font-bold rounded-xl transition">
+                    Stiahnuť CSV
+                  </button>
+                </form>
               </div>
               <?php endforeach; ?>
             </div>

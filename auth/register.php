@@ -42,7 +42,7 @@ if ($password !== $password2) {
 $db = getDB();
 
 // ── Rate limit: max 3 registration attempts per IP per 15 min ────
-$ip          = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+$ip          = getRealIp();
 $now         = time();
 $windowStart = $now - 900;
 $stCount     = $db->prepare("SELECT COUNT(*) FROM login_attempts WHERE ip_address = ? AND timestamp >= ?");

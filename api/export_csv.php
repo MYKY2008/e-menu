@@ -4,7 +4,17 @@ require_once __DIR__ . '/../config.php';
 
 requireLogin();
 
-$slug = sanitizeSlug((string)($_GET['slug'] ?? ''));
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    exit('Method Not Allowed');
+}
+
+if (!csrfValid((string)($_POST['csrf'] ?? ''))) {
+    http_response_code(403);
+    exit('CSRF invalid');
+}
+
+$slug = sanitizeSlug((string)($_POST['slug'] ?? ''));
 if (!preg_match(SLUG_PATTERN, $slug)) {
     http_response_code(400);
     echo 'Neplatný slug.';
@@ -20,6 +30,11 @@ if (!$st->fetch() && ($_SESSION['user_role'] ?? '') !== 'admin') {
     http_response_code(403);
     echo 'Prístup zamietnutý.';
     exit;
+}
+
+function escapeCsv(mixed $value): string {
+    $s = (string)($value ?? '');
+    return ($s !== '' && in_array($s[0], ['=', '+', '-', '@'], true)) ? "'" . $s : $s;
 }
 
 $catSt = $db->prepare("SELECT * FROM categories WHERE venue_slug = ? ORDER BY sort_order, id");
@@ -42,12 +57,12 @@ foreach ($categories as $cat) {
     $iSt->execute([(int)$cat['id']]);
     foreach ($iSt->fetchAll() as $item) {
         fputcsv($out, [
-            $cat['name'],
-            $item['name'],
-            $item['description'],
-            $item['weight'],
+            escapeCsv($cat['name']),
+            escapeCsv($item['name']),
+            escapeCsv($item['description']),
+            escapeCsv($item['weight']),
             number_format((float)$item['price'], 2, '.', ''),
-            $item['allergens'],
+            escapeCsv($item['allergens']),
         ], ';');
     }
 }

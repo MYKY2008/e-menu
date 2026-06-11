@@ -16,6 +16,9 @@ try {
     $payload = json_decode($raw, true);
     if (!is_array($payload)) throw new InvalidArgumentException('Neplatný formát dát.');
     $rawItemImage = $payload['image'] ?? null;
+    if (is_string($rawItemImage) && strlen($rawItemImage) > (int)(MAX_ITEM_BYTES * 1.4)) {
+        throw new InvalidArgumentException('Fotka jedla je príliš veľká (max 700 KB).');
+    }
     $payload = purify($payload);
     $payload['image'] = $rawItemImage;
 
@@ -397,6 +400,7 @@ try {
                         "UPDATE items SET sort_order = :so, category_id = :cat_id WHERE id = :id"
                     );
                     foreach ($ids as $i => $id) {
+                        $getItem($id); // verify each item belongs to this user
                         $st->execute([':so' => $i, ':cat_id' => $targetCatId, ':id' => $id]);
                     }
                 } else {

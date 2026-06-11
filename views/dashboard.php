@@ -1432,15 +1432,24 @@ async function saveVenue() {
   }
 }
 
+function postDownload(url, params) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = url;
+  for (const [k, v] of Object.entries(params)) {
+    const inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = k; inp.value = v;
+    form.appendChild(inp);
+  }
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+}
+
 async function resetMenu(slug) {
   if (!confirm('Zresetovanie zmaže všetky kategórie a jedlá tejto prevádzky. Záloha bude stiahnutá automaticky. Pokračovať?')) return;
-  // Trigger CSV export first
-  const link = document.createElement('a');
-  link.href  = APP_URL + '/api/export_full.php?slug=' + encodeURIComponent(slug) + '&csrf=' + encodeURIComponent(CSRF);
-  link.download = '';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  // Trigger CSV export first via POST form
+  postDownload(APP_URL + '/api/export_full.php', { slug, csrf: CSRF });
   await new Promise(r => setTimeout(r, 800));
   // Call reset_menu
   try {

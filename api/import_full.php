@@ -90,54 +90,63 @@ try {
     $imported    = 0;
     $skipped     = 0;
 
-    while (($row = fgetcsv($handle)) !== false) {
-        if (count($row) < 2) continue;
+    $db->beginTransaction();
+    try {
+        while (($row = fgetcsv($handle)) !== false) {
+            if (count($row) < 2) continue;
 
-        $catName  = trim($row[0] ?? '');
-        $catIcon  = trim($row[1] ?? '');
-        $itemName = trim($row[2] ?? '');
-        $itemDesc = trim($row[3] ?? '');
-        $itemPrice = (float)str_replace(',', '.', trim($row[4] ?? '0'));
-        $itemAllergens = trim($row[5] ?? '');
-        $itemFeatured  = (trim($row[6] ?? '') === '1') ? 1 : 0;
+            $catName       = mb_substr(trim($row[0] ?? ''), 0, 100);
+            $catIcon       = trim($row[1] ?? '');
+            $itemName      = mb_substr(trim($row[2] ?? ''), 0, 100);
+            $itemDesc      = mb_substr(trim($row[3] ?? ''), 0, 255);
+            $itemPrice     = (float)str_replace(',', '.', trim($row[4] ?? '0'));
+            if ($itemPrice < 0) $itemPrice = 0.0;
+            $itemAllergens = trim($row[5] ?? '');
+            $itemFeatured  = (trim($row[6] ?? '') === '1') ? 1 : 0;
 
-        if ($catName === '') continue;
+            if ($catName === '') continue;
 
-        $catKey = strtolower($catName);
+            $catKey = strtolower($catName);
 
-        if (!isset($existCats[$catKey])) {
-            if ($newCatCount >= $maxCats) {
+            if (!isset($existCats[$catKey])) {
+                if ($newCatCount >= $maxCats) {
+                    $skipped++;
+                    continue;
+                }
+                $db->prepare("INSERT INTO categories (venue_slug, name, icon, sort_order) VALUES (?, ?, ?, ?)")
+                   ->execute([$slug, $catName, $catIcon, $newCatCount]);
+                $catId = (int)$db->lastInsertId();
+                $existCats[$catKey]    = $catId;
+                $catItemCounts[$catId] = 0;
+                $newCatCount++;
+            } else {
+                $catId = $existCats[$catKey];
+            }
+
+            if ($itemName === '') continue;
+
+            if (($catItemCounts[$catId] ?? 0) >= $maxItemsCat) {
                 $skipped++;
                 continue;
             }
-            $db->prepare("INSERT INTO categories (venue_slug, name, icon, sort_order) VALUES (?, ?, ?, ?)")
-               ->execute([$slug, $catName, $catIcon, $newCatCount]);
-            $catId = (int)$db->lastInsertId();
-            $existCats[$catKey]  = $catId;
-            $catItemCounts[$catId] = 0;
-            $newCatCount++;
-        } else {
-            $catId = $existCats[$catKey];
+
+            $db->prepare(
+                "INSERT INTO items (category_id, name, description, price, allergens, is_featured, sort_order)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)"
+            )->execute([
+                $catId, $itemName, $itemDesc, $itemPrice, $itemAllergens,
+                $itemFeatured, $catItemCounts[$catId],
+            ]);
+            $catItemCounts[$catId]++;
+            $imported++;
         }
-
-        if ($itemName === '') continue;
-
-        if (($catItemCounts[$catId] ?? 0) >= $maxItemsCat) {
-            $skipped++;
-            continue;
-        }
-
-        $db->prepare(
-            "INSERT INTO items (category_id, name, description, price, allergens, is_featured, sort_order)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
-        )->execute([
-            $catId, $itemName, $itemDesc, $itemPrice, $itemAllergens,
-            $itemFeatured, $catItemCounts[$catId],
-        ]);
-        $catItemCounts[$catId]++;
-        $imported++;
+        fclose($handle);
+        $db->commit();
+    } catch (Throwable $ex) {
+        if ($db->inTransaction()) $db->rollBack();
+        @fclose($handle);
+        throw $ex;
     }
-    fclose($handle);
 
     ob_end_clean();
     echo json_encode(['ok' => true, 'imported' => $imported, 'skipped' => $skipped]);

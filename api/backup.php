@@ -8,6 +8,12 @@ if (!isLoggedIn() || ($_SESSION['user_role'] ?? '') !== 'admin') {
     exit;
 }
 
+if (!csrfValid((string)($_GET['csrf'] ?? ''))) {
+    http_response_code(403);
+    echo 'CSRF invalid';
+    exit;
+}
+
 if (!file_exists(DB_FILE)) {
     http_response_code(404);
     echo 'Databáza nenájdená.';

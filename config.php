@@ -526,9 +526,18 @@ function sendEmail(string $to, string $subject, string $htmlBody): bool {
     }
 }
 
+// ── Real IP (proxy-aware) ────────────────────────────────────
+function getRealIp(): string {
+    $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+    if ($forwarded !== '') {
+        return trim(explode(',', $forwarded)[0]);
+    }
+    return (string)($_SERVER['REMOTE_ADDR'] ?? '');
+}
+
 // ── Session IP guard (anti-hijacking) ────────────────────────
 if (!empty($_SESSION['user_id']) && !empty($_SESSION['login_ip']) &&
-    $_SESSION['login_ip'] !== ($_SERVER['REMOTE_ADDR'] ?? '')) {
+    $_SESSION['login_ip'] !== getRealIp()) {
     session_destroy();
     header('Location: ' . url('login'));
     exit;

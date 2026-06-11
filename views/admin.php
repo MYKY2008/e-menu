@@ -292,7 +292,7 @@ $flash = getFlash();
         Stiahnuť aktuálny stav databázy ako <code class="text-xs bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">.db</code> súbor.
       </p>
     </div>
-    <a href="<?= url('api/backup.php') ?>"
+    <a href="<?= url('api/backup.php') ?>?csrf=<?= csrfToken() ?>"
        class="flex-shrink-0 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white
               font-semibold text-sm rounded-2xl transition-all duration-200 active:scale-95
               shadow-lg shadow-indigo-500/20">

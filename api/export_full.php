@@ -7,15 +7,20 @@ if (!isLoggedIn()) {
     exit('Unauthorized');
 }
 
-$slug = sanitizeSlug((string)($_GET['slug'] ?? ''));
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    exit('Method Not Allowed');
+}
+
+if (!csrfValid((string)($_POST['csrf'] ?? ''))) {
+    http_response_code(403);
+    exit('CSRF invalid');
+}
+
+$slug = sanitizeSlug((string)($_POST['slug'] ?? ''));
 if (!preg_match(SLUG_PATTERN, $slug)) {
     http_response_code(400);
     exit('Invalid slug');
-}
-
-if (!csrfValid((string)($_GET['csrf'] ?? ''))) {
-    http_response_code(403);
-    exit('CSRF invalid');
 }
 
 $userId = (int)$_SESSION['user_id'];
@@ -40,6 +45,11 @@ header('Content-Disposition: attachment; filename="menu-' . $slug . '-' . date('
 header('Pragma: no-cache');
 header('Cache-Control: no-store');
 
+function escapeCsv(mixed $value): string {
+    $s = (string)($value ?? '');
+    return ($s !== '' && in_array($s[0], ['=', '+', '-', '@'], true)) ? "'" . $s : $s;
+}
+
 $out = fopen('php://output', 'w');
 fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel
 
@@ -51,16 +61,16 @@ foreach ($categories as $cat) {
     $items = $iSt->fetchAll();
 
     if (empty($items)) {
-        fputcsv($out, [$cat['name'], $cat['icon'], '', '', '', '', '']);
+        fputcsv($out, [escapeCsv($cat['name']), escapeCsv($cat['icon']), '', '', '', '', '']);
     } else {
         foreach ($items as $item) {
             fputcsv($out, [
-                $cat['name'],
-                $cat['icon'],
-                $item['name'],
-                $item['description'],
+                escapeCsv($cat['name']),
+                escapeCsv($cat['icon']),
+                escapeCsv($item['name']),
+                escapeCsv($item['description']),
                 number_format((float)$item['price'], 2, '.', ''),
-                $item['allergens'],
+                escapeCsv($item['allergens']),
                 $item['is_featured'] ? '1' : '0',
             ]);
         }

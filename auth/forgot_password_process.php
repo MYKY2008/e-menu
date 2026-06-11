@@ -27,7 +27,7 @@ $successMsg = 'Ak je e-mail registrovaný, pošleme vám odkaz na reset hesla. S
 $db = getDB();
 
 // ── Rate limit: max 3 reset attempts per IP per 15 min ───────────
-$ip          = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+$ip          = getRealIp();
 $now         = time();
 $windowStart = $now - 900;
 $stCount     = $db->prepare("SELECT COUNT(*) FROM login_attempts WHERE ip_address = ? AND timestamp >= ?");
