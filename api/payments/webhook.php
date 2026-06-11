@@ -100,6 +100,11 @@ switch ($event['type'] ?? '') {
         if ($sfId !== null && isset($ordRow['id'])) {
             $db->prepare("UPDATE orders SET invoice_id = ? WHERE id = ?")
                ->execute([$sfId, (int)$ordRow['id']]);
+            try {
+                sfSendInvoice((int)$sfId, (string)($userBilling['username'] ?? ''));
+            } catch (Throwable $ex) {
+                gl_log('SuperFaktura sendInvoice exception: ' . $ex->getMessage());
+            }
         }
 
         break;
@@ -144,6 +149,11 @@ switch ($event['type'] ?? '') {
         if ($sfId !== null) {
             $db->prepare("UPDATE orders SET invoice_id = ? WHERE id = ?")
                ->execute([$sfId, $newOrderId]);
+            try {
+                sfSendInvoice((int)$sfId, (string)($userBilling['username'] ?? ''));
+            } catch (Throwable $ex) {
+                gl_log('SuperFaktura sendInvoice exception: ' . $ex->getMessage());
+            }
         }
 
         break;

@@ -1,3 +1,4 @@
+<?php defined('BASE_DIR') or die('Access denied'); ?>
 <!DOCTYPE html>
 <html lang="sk" class="">
 <head>

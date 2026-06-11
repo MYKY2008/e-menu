@@ -1,33 +1,21 @@
-# ÚLOHA: Security Hardening (Bezpečnostné posilnenie)
+# ÚLOHA: Automatické odosielanie faktúr cez SuperFaktura API
 
-Cieľom je implementovať pokročilé bezpečnostné mechanizmy a odstrániť potenciálne zraniteľnosti v celom projekte.
+Cieľom je zabezpečiť, aby po úspešnom vytvorení faktúry bola táto faktúra automaticky odoslaná na e-mail zákazníka priamo zo systému SuperFaktura.
 
-## 1. Globálne bezpečnostné hlavičky (config.php)
-- Na začiatok `config.php` pridaj odosielanie bezpečnostných hlavičiek cez `header()`:
-    - `X-Frame-Options: SAMEORIGIN`
-    - `X-Content-Type-Options: nosniff`
-    - `Referrer-Policy: strict-origin-when-cross-origin`
-    - `Permissions-Policy: geolocation=(), camera=(), microphone=()`
-- **Implementuj Content Security Policy (CSP):**
-    - Povoľ skripty len z 'self' a dôveryhodných CDN (cdnjs, cdn.jsdelivr.net).
-    - Povoľ štýly z 'self', 'unsafe-inline' (kvôli dynamickým farbám) a Google Fonts.
-    - Zakáž `object-src 'none'`.
+## 1. Rozšírenie knižnice (libs/superfaktura.php)
+- Pridaj novú funkciu `sfSendInvoice(int $invoiceId, string $toEmail)`:
+    - Táto funkcia zavolá endpoint `/invoices/send` (alebo ekvivalentný podľa API dokumentácie SuperFaktura).
+    - Parametre v POST požiadavke by mali obsahovať `invoice_id` a `email`.
+    - Zabezpeč správne odoslanie hlavičiek (email a API kľúč).
 
-## 2. Ochrana súborov a priečinkov
-- Do každého súboru, ktorý sa len inkluduje (napr. v `libs/`, `views/partials/`, `config.php`), pridaj na začiatok kontrolu:
-  `defined('BASE_DIR') or die('Access denied');`
-- Vytvor súbor `uploads/.htaccess`, ktorý zakáže spúšťanie PHP skriptov:
-  `php_flag engine off` (ak to server podporuje) a `AddHandler cgi-script .php .phtml .php3`.
+## 2. Aktualizácia Webhooku (api/payments/webhook.php)
+- Uprav časť, kde sa spracováva úspešná platba (`checkout.session.completed` / `invoice.paid`):
+    - Po úspešnom vytvorení faktúry pomocou `sfCreateInvoice()` a získaní jej `id`, zavolaj novú funkciu `sfSendInvoice()`.
+    - Ako e-mail príjemcu použi e-mail užívateľa, ktorý platbu vykonal (získaj ho z objektu `$user`).
 
-## 3. Refaktoring klientskeho menu (views/client_view.php)
-- Odstráň inline JSON objekty z atribútov `onclick` pri jedlách.
-- Namiesto toho ulož dáta o jedle do `data-item='...'` atribútu (zakódované cez `e(json_encode(...))`).
-- Uprav JavaScript tak, aby pri kliknutí načítal dáta z `dataset.item`.
-- Týmto sa eliminujú problémy s úvodzovkami a potenciálny XSS.
+## 3. Ošetrenie chýb
+- Ak odoslanie e-mailu zo SuperFaktury zlyhá, zapíš túto chybu do `gl_log()`, ale neprerušuj beh webhooku (aby platba ostala označená ako úspešná).
+- Pridaj logovaciu správu pri úspešnom odoslaní faktúry (napr. "Faktúra ID: XXX odoslaná na email: YYY").
 
-## 4. Validácia vstupov a Sanizácia
-- V `api/manage_menu.php` a `api/save_venue.php` prever, či sú všetky textové vstupy prehnané cez `purify()`.
-- Zabezpeč, aby sa pri nahrávaní súborov v `saveImageFile` (v `config.php`) vždy vygeneroval nový názov súboru (už sa deje, ale over to).
-
-## 5. Logout Security (auth/logout.php)
-- Zabezpeč, aby odhlásenie prebehlo úplne: `$_SESSION = [];`, `session_destroy();` a vymazanie session cookie.
+## 4. Double-check
+- Skontroluj, či sa faktúra odosiela až po tom, čo bola úspešne vytvorená a máme k dispozícii jej ID.

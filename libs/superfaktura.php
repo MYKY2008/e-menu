@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+defined('BASE_DIR') or die('Access denied');
 /**
  * SuperFaktura API helper.
  * Requires SF_EMAIL, SF_API_KEY, SF_COMPANY_ID in .env.
@@ -104,6 +105,52 @@ function sfCreateInvoice(array $order, array $user): ?string {
     }
 
     return $invoiceId;
+}
+
+/**
+ * Odošle faktúru emailom zákazníkovi cez SuperFaktura.
+ * @return bool  true pri úspešnom odoslaní, false pri chybe (chyba je zalogovaná)
+ */
+function sfSendInvoice(int $invoiceId, string $toEmail): bool {
+    if (!_sfConfigured()) {
+        gl_log('SuperFaktura: SF_EMAIL alebo SF_API_KEY nie je nastavený.');
+        return false;
+    }
+
+    $payload = json_encode([
+        'Invoice' => ['id' => $invoiceId],
+        'Email'   => ['to' => $toEmail],
+    ]);
+
+    $ch = curl_init(_sfBaseUrl() . '/invoices/send');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => 'data=' . urlencode((string)$payload),
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: ' . _sfAuthHeader(),
+            'Content-Type: application/x-www-form-urlencoded',
+        ],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false || ($httpCode !== 200 && $httpCode !== 201)) {
+        gl_log('SuperFaktura sendInvoice HTTP ' . $httpCode . ' id=' . $invoiceId . ': ' . (string)$response);
+        return false;
+    }
+
+    $data  = json_decode((string)$response, true);
+    $error = (int)($data['error'] ?? 1);
+    if ($error !== 0) {
+        gl_log('SuperFaktura sendInvoice error id=' . $invoiceId . ': ' . ($data['error_message'] ?? (string)$response));
+        return false;
+    }
+
+    gl_log('Faktúra ID: ' . $invoiceId . ' odoslaná na email: ' . $toEmail);
+    return true;
 }
 
 /**

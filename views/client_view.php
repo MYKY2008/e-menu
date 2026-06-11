@@ -405,7 +405,8 @@ $AL = [
           $ftc = menuTextColor($fbg);
           $fpr = number_format((float)$fi['price'], 2, ',', '');
         ?>
-        <button onclick='openSheet(<?= json_encode($fi, JSON_HEX_APOS | JSON_UNESCAPED_UNICODE) ?>)'
+        <button data-item="<?= e(json_encode($fi, JSON_UNESCAPED_UNICODE)) ?>"
+                onclick="openSheet(JSON.parse(this.dataset.item))"
                 class="flex-none w-36 rounded-[2rem] p-4 text-left shadow-sm
                        border border-gray-100 dark:border-slate-700
                        hover:shadow-md active:scale-95 transition-all duration-200
@@ -508,7 +509,8 @@ $AL = [
                            ? 'bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-800'
                            : '' ?>"
                 <?= !$isWhiteCard ? "style=\"background:{$ibg}\"" : '' ?>
-                onclick='openSheet(<?= json_encode($item, JSON_HEX_APOS | JSON_UNESCAPED_UNICODE) ?>)'>
+                data-item="<?= e(json_encode($item, JSON_UNESCAPED_UNICODE)) ?>"
+                onclick="openSheet(JSON.parse(this.dataset.item))">
           <div class="flex items-start gap-3">
             <div class="flex-1 min-w-0">
               <p class="font-semibold text-sm leading-snug

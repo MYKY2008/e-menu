@@ -1,8 +1,5 @@
-# Zákaz spúšťania skriptov
-<FilesMatch "\.(php|phtml|php3|php4|php5|php7|php8|pl|py|jsp|asp|htm|html|shtml|sh|cgi)$">
-    Order allow,deny
-    Deny from all
-</FilesMatch>
-RemoveHandler .php .phtml .php3
-RemoveType .php .phtml .php3
-php_flag engine off
+﻿php_flag engine off
+Options -ExecCGI
+AddHandler cgi-script .php .phtml .php3 .php4 .php5 .php7
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7
+

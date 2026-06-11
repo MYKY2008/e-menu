@@ -49,6 +49,25 @@ define('MAX_ITEM_BYTES',  1_000_000); // ~700 KB base64
 define('ALLOWED_COLORS',  ['green', 'burgundy', 'coffee', 'black', 'orange']);
 define('UPLOADS_DIR',     BASE_DIR . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'venues');
 
+// ── Security headers ──────────────────────────────────────────
+if (!headers_sent()) {
+    header('X-Frame-Options: SAMEORIGIN');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
+    header(
+        "Content-Security-Policy: default-src 'self'; " .
+        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; " .
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
+        "font-src 'self' https://fonts.gstatic.com; " .
+        "img-src 'self' data: blob:; " .
+        "connect-src 'self'; " .
+        "object-src 'none'; " .
+        "base-uri 'self'; " .
+        "frame-ancestors 'self';"
+    );
+}
+
 // ── Database singleton ────────────────────────────────────────
 function getDB(): PDO {
     static $pdo = null;
