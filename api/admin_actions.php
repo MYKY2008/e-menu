@@ -154,6 +154,10 @@ try {
             );
             $stU->execute([$uid]);
             $upd = $stU->fetch();
+            // Ak admin mení svoju vlastnú rolu/plán, regeneruj session ID
+            if ($uid === (int)$_SESSION['user_id']) {
+                regenerateSession();
+            }
             ob_end_clean();
             echo json_encode(['ok' => true, 'user' => [
                 'id'               => (int)$upd['id'],

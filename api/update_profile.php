@@ -45,6 +45,11 @@ if ($action === 'billing') {
         exit;
     }
 
+    if ($icDph !== '' && !preg_match('/^[A-Za-z]{2}\d+$/', $icDph)) {
+        echo json_encode(['ok' => false, 'error' => 'IČ DPH musí začínať dvoma písmenami (napr. SK, CZ) a obsahovať len číslice za nimi.']);
+        exit;
+    }
+
     $db->prepare(
         "UPDATE users SET company_name=?, ico=?, dic=?, ic_dph=?,
          billing_street=?, billing_city=?, billing_zip=?, billing_country=? WHERE id=?"

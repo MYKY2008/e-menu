@@ -68,7 +68,7 @@ if (!(int)($user['is_verified'] ?? 0)) {
 // ── Success: clear attempts for this IP ───────────────────────────
 $db->prepare("DELETE FROM login_attempts WHERE ip_address = ?")->execute([$ip]);
 
-session_regenerate_id(true);
+regenerateSession();
 unset($_SESSION['csrf']);
 
 $db->prepare("UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?")
@@ -78,7 +78,6 @@ $_SESSION['user_id']     = (int)$user['id'];
 $_SESSION['username']    = $user['username'];
 $_SESSION['user_role']   = $user['role'];
 $_SESSION['venue_limit'] = (int)$user['venue_limit'];
-$_SESSION['login_ip']    = getRealIp();
 
 $target = ($user['role'] === 'admin') ? url('admin') : url('dashboard');
 header('Location: ' . $target);

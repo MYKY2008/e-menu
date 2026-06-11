@@ -62,6 +62,12 @@ switch ($event['type'] ?? '') {
 
         if (!$userId || !in_array($planId, ['pro', 'ultra', 'custom'], true)) break;
 
+        // Idempotency: skip if this session was already processed
+        $idSt = $db->prepare("SELECT status FROM orders WHERE stripe_session_id = ?");
+        $idSt->execute([$sessionId]);
+        $existing = $idSt->fetch();
+        if ($existing && $existing['status'] === 'paid') break;
+
         [$maxV, $maxC, $maxI] = match($planId) {
             'ultra'  => [1, 20, 50],
             'pro'    => [1, 10, 25],
@@ -174,6 +180,47 @@ switch ($event['type'] ?? '') {
             "INSERT INTO orders (user_id, plan_name, amount, currency, status, created_at)
              VALUES (?, ?, 0, 'EUR', 'failed', strftime('%Y-%m-%dT%H:%M:%SZ','now'))"
         )->execute([(int)$user['id'], $user['plan_name']]);
+
+        break;
+    }
+
+    // ── Zmena predplatného v Stripe ───────────────────────────────
+    case 'customer.subscription.updated': {
+        $sub     = $event['data']['object'] ?? [];
+        $subId   = (string)($sub['id']     ?? '');
+        $status  = (string)($sub['status'] ?? '');
+
+        if (!$subId || $status !== 'active') break;
+
+        $priceId = (string)($sub['items']['data'][0]['price']['id'] ?? '');
+        if ($priceId === '') break;
+
+        $priceMap = [
+            $_ENV['STRIPE_PRICE_PRO']    ?? '' => 'pro',
+            $_ENV['STRIPE_PRICE_ULTRA']  ?? '' => 'ultra',
+            $_ENV['STRIPE_PRICE_CUSTOM'] ?? '' => 'custom',
+        ];
+        unset($priceMap['']);
+
+        $planId = $priceMap[$priceId] ?? '';
+        if ($planId === '') break;
+
+        $st = $db->prepare("SELECT id FROM users WHERE stripe_subscription_id = ?");
+        $st->execute([$subId]);
+        $user = $st->fetch();
+        if (!$user) break;
+
+        [$maxV, $maxC, $maxI] = match($planId) {
+            'ultra'  => [1, 20, 50],
+            'pro'    => [1, 10, 25],
+            default  => [1,  3,  5],
+        };
+        $planEndsAt = date('Y-m-d\TH:i:s\Z', strtotime('+1 month'));
+
+        $db->prepare(
+            "UPDATE users SET plan_name=?, max_venues=?, max_categories=?, max_items_per_cat=?,
+             venue_limit=?, plan_ends_at=?, next_plan_name=NULL WHERE id=?"
+        )->execute([$planId, $maxV, $maxC, $maxI, $maxV, $planEndsAt, (int)$user['id']]);
 
         break;
     }

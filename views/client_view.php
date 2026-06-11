@@ -29,18 +29,23 @@ $ownerSt->execute([(int)$venue['user_id']]);
 $ownerRow = $ownerSt->fetch();
 if ($ownerRow && $ownerRow['plan_ends_at'] !== null
     && strtotime((string)$ownerRow['plan_ends_at']) < time()) {
-    http_response_code(503);
-    echo '<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8">'
-       . '<title>Menu nedostupné</title>'
-       . '<link rel="stylesheet" href="' . asset('assets/css/style.css') . '"></head>'
-       . '<body class="min-h-screen flex items-center justify-center bg-gray-50">'
-       . '<div class="text-center max-w-sm px-6">'
-       . '<p class="text-5xl mb-4">⏳</p>'
-       . '<h1 class="text-xl font-bold text-gray-900 mb-2">Jedálny lístok nedostupný</h1>'
-       . '<p class="text-sm text-gray-500">Tento jedálny lístok je momentálne nedostupný'
-       . ' (expirácia predplatného).</p>'
-       . '</div></body></html>';
-    exit;
+    // Lock down only if the menu content exceeds free plan limits (3 categories)
+    $catCntSt = $db->prepare("SELECT COUNT(*) FROM categories WHERE venue_slug = ? AND is_visible = 1");
+    $catCntSt->execute([$slug]);
+    $visibleCatCount = (int)$catCntSt->fetchColumn();
+    if ($visibleCatCount > 3) {
+        http_response_code(503);
+        echo '<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8">'
+           . '<title>Menu nedostupné</title>'
+           . '<link rel="stylesheet" href="' . asset('assets/css/style.css') . '"></head>'
+           . '<body class="min-h-screen flex items-center justify-center bg-gray-50">'
+           . '<div class="text-center max-w-sm px-6">'
+           . '<p class="text-5xl mb-4">⏳</p>'
+           . '<h1 class="text-xl font-bold text-gray-900 mb-2">Jedálny lístok dočasne nedostupný</h1>'
+           . '<p class="text-sm text-gray-500">Toto menu je dočasne nedostupné. Kontaktujte prosím prevádzku.</p>'
+           . '</div></body></html>';
+        exit;
+    }
 }
 
 // ── HTTP caching (ETag / 304) ─────────────────────────────────

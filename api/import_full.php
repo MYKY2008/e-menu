@@ -94,51 +94,60 @@ try {
     try {
         while (($row = fgetcsv($handle)) !== false) {
             if (count($row) < 2) continue;
+            try {
+                $catName  = mb_substr(trim($row[0] ?? ''), 0, 100);
+                $catIcon  = mb_substr(trim($row[1] ?? ''), 0, 50);
+                $itemName = mb_substr(trim($row[2] ?? ''), 0, 100);
+                $itemDesc = mb_substr(trim($row[3] ?? ''), 0, 255);
 
-            $catName       = mb_substr(trim($row[0] ?? ''), 0, 100);
-            $catIcon       = trim($row[1] ?? '');
-            $itemName      = mb_substr(trim($row[2] ?? ''), 0, 100);
-            $itemDesc      = mb_substr(trim($row[3] ?? ''), 0, 255);
-            $itemPrice     = (float)str_replace(',', '.', trim($row[4] ?? '0'));
-            if ($itemPrice < 0) $itemPrice = 0.0;
-            $itemAllergens = trim($row[5] ?? '');
-            $itemFeatured  = (trim($row[6] ?? '') === '1') ? 1 : 0;
-
-            if ($catName === '') continue;
-
-            $catKey = strtolower($catName);
-
-            if (!isset($existCats[$catKey])) {
-                if ($newCatCount >= $maxCats) {
-                    $skipped++;
-                    continue;
+                // Price — must be a valid non-negative number
+                $rawPrice = str_replace(',', '.', trim($row[4] ?? '0'));
+                if ($rawPrice !== '' && !is_numeric($rawPrice)) {
+                    throw new InvalidArgumentException("Neplatná cena: '{$rawPrice}'");
                 }
-                $db->prepare("INSERT INTO categories (venue_slug, name, icon, sort_order) VALUES (?, ?, ?, ?)")
-                   ->execute([$slug, $catName, $catIcon, $newCatCount]);
-                $catId = (int)$db->lastInsertId();
-                $existCats[$catKey]    = $catId;
-                $catItemCounts[$catId] = 0;
-                $newCatCount++;
-            } else {
-                $catId = $existCats[$catKey];
-            }
+                $itemPrice = max(0.0, (float)($rawPrice === '' ? '0' : $rawPrice));
 
-            if ($itemName === '') continue;
+                $itemAllergens = mb_substr(trim($row[5] ?? ''), 0, 255);
+                // Is Featured — accept only '1' as true, everything else = 0
+                $itemFeatured  = (trim($row[6] ?? '') === '1') ? 1 : 0;
 
-            if (($catItemCounts[$catId] ?? 0) >= $maxItemsCat) {
+                // Skip rows without a category name (would create orphan items)
+                if ($catName === '') continue;
+
+                $catKey = strtolower($catName);
+
+                if (!isset($existCats[$catKey])) {
+                    if ($newCatCount >= $maxCats) { $skipped++; continue; }
+                    $db->prepare("INSERT INTO categories (venue_slug, name, icon, sort_order) VALUES (?, ?, ?, ?)")
+                       ->execute([$slug, $catName, $catIcon, $newCatCount]);
+                    $catId = (int)$db->lastInsertId();
+                    $existCats[$catKey]    = $catId;
+                    $catItemCounts[$catId] = 0;
+                    $newCatCount++;
+                } else {
+                    $catId = $existCats[$catKey];
+                }
+
+                // Skip rows with no item name — category was created/found but no item to insert
+                if ($itemName === '') continue;
+
+                if (($catItemCounts[$catId] ?? 0) >= $maxItemsCat) { $skipped++; continue; }
+
+                $db->prepare(
+                    "INSERT INTO items (category_id, name, description, price, allergens, is_featured, sort_order)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)"
+                )->execute([
+                    $catId, $itemName, $itemDesc, $itemPrice, $itemAllergens,
+                    $itemFeatured, (int)($catItemCounts[$catId] ?? 0),
+                ]);
+                $catItemCounts[$catId]++;
+                $imported++;
+
+            } catch (Throwable $rowEx) {
+                // Log bad rows but continue importing the rest
+                gl_log('Import row skip: ' . $rowEx->getMessage() . ' | ' . implode(' | ', array_map('trim', $row)));
                 $skipped++;
-                continue;
             }
-
-            $db->prepare(
-                "INSERT INTO items (category_id, name, description, price, allergens, is_featured, sort_order)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)"
-            )->execute([
-                $catId, $itemName, $itemDesc, $itemPrice, $itemAllergens,
-                $itemFeatured, $catItemCounts[$catId],
-            ]);
-            $catItemCounts[$catId]++;
-            $imported++;
         }
         fclose($handle);
         $db->commit();

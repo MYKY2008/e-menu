@@ -29,18 +29,49 @@ try {
     switch ($action) {
 
         case 'cancel_plan': {
-            $planSt = $db->prepare("SELECT plan_name, plan_ends_at FROM users WHERE id = ?");
+            $planSt = $db->prepare(
+                "SELECT plan_name, plan_ends_at, stripe_subscription_id FROM users WHERE id = ?"
+            );
             $planSt->execute([$userId]);
             $planRow    = $planSt->fetch();
-            $planName   = (string)($planRow['plan_name']   ?? 'free');
-            $planEndsAt = $planRow['plan_ends_at'] ?? null;
+            $planName   = (string)($planRow['plan_name']             ?? 'free');
+            $planEndsAt = $planRow['plan_ends_at']                   ?? null;
+            $subId      = (string)($planRow['stripe_subscription_id'] ?? '');
 
             if (!in_array($planName, ['pro', 'ultra', 'custom'], true)) {
                 throw new InvalidArgumentException('Nemáte aktívny platený plán.');
             }
 
+            // Tell Stripe to stop renewing at period end
+            if ($subId !== '' && extension_loaded('curl')) {
+                $stripeKey = $_ENV['STRIPE_SECRET_KEY'] ?? '';
+                if ($stripeKey !== '') {
+                    $ch = curl_init('https://api.stripe.com/v1/subscriptions/' . rawurlencode($subId));
+                    curl_setopt_array($ch, [
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_CUSTOMREQUEST  => 'POST',
+                        CURLOPT_POSTFIELDS     => 'cancel_at_period_end=true',
+                        CURLOPT_USERPWD        => $stripeKey . ':',
+                        CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
+                        CURLOPT_TIMEOUT        => 10,
+                        CURLOPT_SSL_VERIFYPEER => false,
+                    ]);
+                    $sResp = curl_exec($ch);
+                    $sCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $sErrN = curl_errno($ch);
+                    $sErrM = curl_error($ch);
+                    if ($sErrN !== 0) {
+                        gl_log("cancel_plan Stripe cURL #{$sErrN}: {$sErrM}");
+                    } elseif ($sCode !== 200) {
+                        $sErrData = json_decode((string)$sResp, true);
+                        gl_log('cancel_plan Stripe HTTP ' . $sCode . ': '
+                            . ($sErrData['error']['message'] ?? '?'));
+                    }
+                }
+            }
+
             if ($planEndsAt !== null && strtotime((string)$planEndsAt) > time()) {
-                // Active billing period: schedule downgrade only, data untouched
+                // Active billing period: schedule downgrade, keep data untouched
                 $db->prepare("UPDATE users SET next_plan_name='free' WHERE id=?")
                    ->execute([$userId]);
                 ob_end_clean();
@@ -48,7 +79,7 @@ try {
                 exit;
             }
 
-            // No billing period: switch to free limits, data untouched
+            // No billing period: switch to free limits immediately
             $db->prepare(
                 "UPDATE users SET plan_name='free', max_venues=1, max_categories=3,
                  max_items_per_cat=5, venue_limit=1, plan_ends_at=NULL, next_plan_name=NULL WHERE id=?"

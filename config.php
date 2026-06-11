@@ -589,6 +589,11 @@ function getRealIp(): string {
     return (string)($_SERVER['REMOTE_ADDR'] ?? '');
 }
 
+function regenerateSession(): void {
+    session_regenerate_id(true);
+    $_SESSION['login_ip'] = getRealIp();
+}
+
 // ── Session IP guard (anti-hijacking) ────────────────────────
 if (!empty($_SESSION['user_id']) && !empty($_SESSION['login_ip']) &&
     $_SESSION['login_ip'] !== getRealIp()) {

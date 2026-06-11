@@ -251,6 +251,11 @@ $csrf         = csrfToken();
                            : 'bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300')) ?>">
         <?= $isCurrent ? '✓ Váš aktuálny plán' : 'Vybrať plán' ?>
       </button>
+      <?php if ($nextPlanName !== null && $plan['id'] === $nextPlanName): ?>
+      <p class="text-center text-[11px] text-blue-600 dark:text-blue-400 mt-2 font-medium">
+        Aktivuje sa <?= $planEndsAt ? e(date('d. m. Y', strtotime((string)$planEndsAt))) : 'po skončení obdobia' ?>
+      </p>
+      <?php endif; ?>
     </div>
     <?php endforeach; ?>
   </div>
@@ -417,7 +422,7 @@ async function selectPlan(planId) {
   const current   = <?= json_encode($userPlan) ?>;
   const endsAt    = <?= json_encode($planEndsAt) ?>;
   const planOrder = { free: 0, pro: 1, ultra: 2, custom: 3 };
-  if (planId === current) return;
+  if (planId === current) { toast('Tento plán už využívate.', 'info'); return; }
 
   // Downgrade — spravuje profil
   const isDowngrade = (planOrder[planId] ?? 0) < (planOrder[current] ?? 0);

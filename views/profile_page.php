@@ -374,11 +374,19 @@ $tabs = [
 
             <?php if ($isPaidPlan): ?>
             <div class="pt-2">
+              <?php if ($nextPlanName === 'free'): ?>
+              <p class="text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
+                Predplatné bude ukončené k
+                <strong><?= $planEndsAt ? e(date('d. m. Y', strtotime((string)$planEndsAt))) : '—' ?></strong>.
+                Opätovná obnova je vypnutá.
+              </p>
+              <?php else: ?>
               <button onclick="openCancelModal()"
                 class="text-xs font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-400
                        underline underline-offset-2 transition">
                 Zrušiť predplatné
               </button>
+              <?php endif; ?>
             </div>
             <?php endif; ?>
           </div>

@@ -68,11 +68,19 @@ echo.
 echo  URL : http://localhost:8080
 echo  Stop: Ctrl+C
 echo.
+echo  Logy:
+echo  [HH:MM:SS][ OK] GET  /stranka       200  (Xms)
+echo  [HH:MM:SS][RDR] GET  /login         302  (Xms)
+echo  [HH:MM:SS][404] GET  /nenajdene     404  (Xms)
+echo  [HH:MM:SS][ERR] POST /api/...       500  (Xms)
+echo  (staticke assety - css/js/obrazky - sa neloguju)
+echo.
 
 start "" "http://localhost:8080"
 
 cd /d "%~dp0"
-"%PHP%" %EXT% -S localhost:8080 index.php
+:: -d error_log= : vynuti logovanie do konzoly namiesto suboru z php.ini
+"%PHP%" %EXT% -d error_log= -S localhost:8080 index.php 2>&1
 
 echo.
 pause

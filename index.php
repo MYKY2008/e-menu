@@ -1,5 +1,26 @@
 <?php
 declare(strict_types=1);
+
+// ── Dev request logger (len pri php -S) ──────────────────────
+if (PHP_SAPI === 'cli-server') {
+    $_glT0  = microtime(true);
+    $_glMth = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    $_glUri = $_SERVER['REQUEST_URI']    ?? '/';
+    $_glExt = strtolower(pathinfo(parse_url($_glUri, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
+    // Staticke assety nelogujeme (css, js, obrazky...) — prilis sumu
+    if (!in_array($_glExt, ['css','js','png','jpg','jpeg','webp','gif','svg',
+                             'ico','woff','woff2','ttf','otf','map'], true)) {
+        register_shutdown_function(function () use ($_glT0, $_glMth, $_glUri) {
+            $code = (int)http_response_code();
+            $ms   = (int)round((microtime(true) - $_glT0) * 1000);
+            $tag  = $code >= 500 ? 'ERR' : ($code >= 400 ? $code : ($code >= 300 ? 'RDR' : ' OK'));
+            error_log(sprintf('[%s][%s] %-4s %s  (%dms)',
+                date('H:i:s'), $tag, $_glMth, $_glUri, $ms));
+        });
+    }
+    unset($_glExt);
+}
+
 require_once __DIR__ . '/config.php';
 
 // ── PHP built-in server: serve real files directly ────────────
@@ -68,6 +89,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     };
     // If a POST route was matched, auth files redirect and exit.
     // Fall through to GET rendering otherwise (e.g. validation failures re-render form).
+}
+
+// ── Global plan expiry check ──────────────────────────────────
+if (isLoggedIn()) {
+    applyPlanTransitionIfNeeded(getDB(), (int)$_SESSION['user_id']);
 }
 
 // ── GET routing ───────────────────────────────────────────────

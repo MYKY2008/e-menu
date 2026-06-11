@@ -61,6 +61,41 @@ $db     = getDB();
 $userId = (int)$_SESSION['user_id'];
 $email  = (string)($_SESSION['username'] ?? '');
 
+// If user already has a Stripe subscription, redirect to Customer Portal for plan changes
+$stUser = $db->prepare("SELECT stripe_customer_id, stripe_subscription_id FROM users WHERE id = ?");
+$stUser->execute([$userId]);
+$uRow       = $stUser->fetch();
+$existSubId = (string)($uRow['stripe_subscription_id'] ?? '');
+$existCustId = (string)($uRow['stripe_customer_id']    ?? '');
+
+if ($existSubId !== '' && $existCustId !== '') {
+    $portalCh = curl_init('https://api.stripe.com/v1/billing_portal/sessions');
+    curl_setopt_array($portalCh, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => http_build_query([
+            'customer'   => $existCustId,
+            'return_url' => baseUrl() . '/plans',
+        ]),
+        CURLOPT_USERPWD        => $stripeKey . ':',
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+    $portalResp = curl_exec($portalCh);
+    $portalCode = (int)curl_getinfo($portalCh, CURLINFO_HTTP_CODE);
+    $portalErr  = curl_errno($portalCh);
+
+    if ($portalResp !== false && $portalErr === 0 && $portalCode === 200) {
+        $portal = json_decode((string)$portalResp, true);
+        if (!empty($portal['url'])) {
+            echo json_encode(['ok' => true, 'url' => $portal['url']]);
+            exit;
+        }
+    }
+    gl_log('create_session: portal fallback failed (code=' . $portalCode . ', errno=' . $portalErr . '), proceeding to checkout');
+}
+
 $appUrl     = baseUrl();
 $successUrl = $appUrl . '/dashboard?payment=success&plan=' . urlencode($planId);
 $cancelUrl  = $appUrl . '/plans';
