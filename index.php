@@ -105,7 +105,7 @@ switch (true) {
         break;
 
     case $path === '/login':
-        if (isLoggedIn()) {
+        if (isLoggedIn() && !empty($_SESSION['is_verified'])) {
             header('Location: ' . url('dashboard'));
             exit;
         }
@@ -113,7 +113,7 @@ switch (true) {
         break;
 
     case $path === '/register':
-        if (isLoggedIn()) {
+        if (isLoggedIn() && !empty($_SESSION['is_verified'])) {
             header('Location: ' . url('dashboard'));
             exit;
         }
@@ -121,7 +121,7 @@ switch (true) {
         break;
 
     case $path === '/forgot-password':
-        if (isLoggedIn()) {
+        if (isLoggedIn() && !empty($_SESSION['is_verified'])) {
             header('Location: ' . url('dashboard'));
             exit;
         }
@@ -129,7 +129,7 @@ switch (true) {
         break;
 
     case $path === '/reset-password':
-        if (isLoggedIn()) {
+        if (isLoggedIn() && !empty($_SESSION['is_verified'])) {
             header('Location: ' . url('dashboard'));
             exit;
         }

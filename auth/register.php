@@ -104,11 +104,12 @@ $emailSent  = sendEmail(
     . '</div></body></html>'
 );
 
+$_SESSION['registered_email'] = $username;
 flash(
     $emailSent
         ? 'Registrácia úspešná! Skontrolujte e-mail a aktivujte účet.'
         : 'Účet bol vytvorený. Odoslanie aktivačného e-mailu zlyhalo — kontaktujte podporu.',
     $emailSent ? 'success' : 'error'
 );
-header('Location: ' . url('login'));
+header('Location: ' . url('register?success=1'));
 exit;
