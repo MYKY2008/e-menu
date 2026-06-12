@@ -8,7 +8,7 @@ Tento dokument slúži ako roadmapa pre opravy a hardening projektu pred ostrým
 - [x] **Data-atribúty v Dashboarde:** ✅ Hotové
 - [x] **Session Re-regeneration:** ✅ Hotové
 - [x] **Verifikácia registrácie:** Opraviť stav, keď sa používateľ vie prihlásiť aj bez kliknutia na overovací link z registračného mailu. ✅
-- [ ] **Stripe SSL Verifikácia:** Vrátiť `CURLOPT_SSL_VERIFYPEER` na `true` v `create_session.php` a `create_portal_session.php`. Pridať inštrukciu pre localhost do diagnostiky.
+- [x] **Stripe SSL Verifikácia:** Vrátiť `CURLOPT_SSL_VERIFYPEER` na `true` v `create_session.php` a `create_portal_session.php`. ✅
 - [ ] **Ownership Hardening (manage_menu.php):** Pridať kontrolu vlastníctva pre každé ID v hromadných operáciách (reorder).
 
 ## 🟡 2. Biznis Logika a Platby
