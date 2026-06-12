@@ -42,6 +42,7 @@ $_SESSION['username']    = $user['username'];
 $_SESSION['user_role']   = $user['role'];
 $_SESSION['venue_limit'] = (int)$user['venue_limit'];
 $_SESSION['login_ip']    = getRealIp();
+$_SESSION['is_verified'] = 1;
 
 flash('Účet bol úspešne aktivovaný. Vitajte!', 'success');
 $target = ($user['role'] === 'admin') ? url('admin') : url('dashboard');

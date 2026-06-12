@@ -506,7 +506,7 @@ function isLoggedIn(): bool {
 }
 
 function requireLogin(): void {
-    if (!isLoggedIn()) {
+    if (!isLoggedIn() || empty($_SESSION['is_verified'])) {
         flash('Pre prístup sa musíte prihlásiť.', 'error');
         header('Location: ' . url('login'));
         exit;
@@ -514,7 +514,7 @@ function requireLogin(): void {
 }
 
 function requireAdmin(): void {
-    if (!isLoggedIn() || ($_SESSION['user_role'] ?? '') !== 'admin') {
+    if (!isLoggedIn() || empty($_SESSION['is_verified']) || ($_SESSION['user_role'] ?? '') !== 'admin') {
         flash('Prístup zamietnutý.', 'error');
         header('Location: ' . url());
         exit;

@@ -39,7 +39,7 @@ if ((int)$stCount->fetchColumn() >= 3) {
 }
 $db->prepare("INSERT INTO login_attempts (ip_address, timestamp) VALUES (?, ?)")->execute([$ip, $now]);
 
-$st = $db->prepare("SELECT id FROM users WHERE username = ?");
+$st = $db->prepare("SELECT id FROM users WHERE username = ? AND is_verified = 1");
 $st->execute([$email]);
 $user = $st->fetch();
 
