@@ -80,7 +80,7 @@ if ($existSubId !== '' && $existCustId !== '') {
         CURLOPT_USERPWD        => $stripeKey . ':',
         CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
         CURLOPT_TIMEOUT        => 15,
-        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYPEER => true,
     ]);
     $portalResp = curl_exec($portalCh);
     $portalCode = (int)curl_getinfo($portalCh, CURLINFO_HTTP_CODE);
