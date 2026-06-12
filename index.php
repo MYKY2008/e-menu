@@ -85,6 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         '/register'         => (static function () { require BASE_DIR . '/auth/register.php'; })(),
         '/forgot-password'  => (static function () { require BASE_DIR . '/auth/forgot_password_process.php'; })(),
         '/reset-password'   => (static function () { require BASE_DIR . '/auth/reset_password_process.php'; })(),
+        '/verify'           => (static function () { require BASE_DIR . '/auth/verify.php'; })(),
         default             => null,
     };
     // If a POST route was matched, auth files redirect and exit.

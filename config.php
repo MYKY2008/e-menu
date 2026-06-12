@@ -511,6 +511,16 @@ function requireLogin(): void {
         header('Location: ' . url('login'));
         exit;
     }
+    // DB safety net: if the session is stale and DB shows is_verified = 0, force logout
+    $st = getDB()->prepare("SELECT is_verified FROM users WHERE id = ?");
+    $st->execute([(int)$_SESSION['user_id']]);
+    $row = $st->fetch();
+    if (!$row || !(int)$row['is_verified']) {
+        session_destroy();
+        flash('Váš účet nie je overený. Prihláste sa prosím.', 'error');
+        header('Location: ' . url('login'));
+        exit;
+    }
 }
 
 function requireAdmin(): void {

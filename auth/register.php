@@ -73,6 +73,18 @@ if ($st->fetch()) {
 $count = (int)$db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $role  = ($count === 0) ? 'admin' : 'user';
 
+// Clear any existing session before creating the new account
+session_unset();
+session_destroy();
+session_start([
+    'cookie_httponly' => true,
+    'cookie_samesite' => 'Lax',
+    'cookie_secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+    'cookie_lifetime' => 0,
+    'use_strict_mode' => true,
+    'gc_maxlifetime'  => 7200,
+]);
+
 $hash  = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
 $token = bin2hex(random_bytes(32));
 

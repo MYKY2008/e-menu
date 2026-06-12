@@ -1,33 +1,41 @@
-# ÚLOHA: Komplexný životný cyklus predplatného (Upgrade, Downgrade, Expirácia)
+# Oprava verifikácie účtov a ochrana proti robotom (Gmail/Outlook scannery)
 
-Cieľom je zabezpečiť 100% správne fungovanie platieb, správu plánov v Stripe a férový prechod medzi plánmi.
+## Problém
+1. **Invalid Link / Automatická verifikácia:** Emailové scannery (Gmail, Outlook) klikajú na linky automaticky. Aktuálne `auth/verify.php` vykoná verifikáciu hneď pri GET požiadavke (kliknutí). To znamená, že účet sa aktivuje skôr, než naň klikne človek, a skutočný klik užívateľa potom hlási "neplatný odkaz".
+2. **Bezpečnosť:** Chceme, aby verifikáciu potvrdil **človek**, nie jeho schránka.
+3. **Priebeh:** Po aktivácii chceme, aby sa užívateľ **prihlásil manuálne**, čím potvrdí, že pozná svoje prihlasovacie údaje.
 
-## 1. Upgrade & Downgrade Logika (api/payments/create_session.php)
-- **Upgrade:** Ak užívateľ už má platený plán (napr. pro) a vyberie si vyšší (napr. ultra):
-    - Nepoužívaj `subscription` mód pre novú session, ale využi Stripe API na **zmenu existujúceho subscription** (ak je to možné) alebo vytvor session, ktorá pri úspechu cez Webhook upraví existujúci odber.
-    - *Zjednodušené riešenie:* Ak už má `stripe_subscription_id`, presmeruj ho do **Stripe Customer Portal** (musíš ho nakonfigurovať v Stripe Dashboarde a vytvoriť endpoint `create_portal_session.php`), kde si môže sám zmeniť plán. Toto je najbezpečnejšia cesta pre B2B.
-- **Downgrade:** Ak si užívateľ vyberie nižší plán:
-    - Nenúť ho ísť do profilu. Nastav mu `next_plan_name` na tento nový plán.
-    - V Stripe nastav `cancel_at_period_end = true` pre aktuálny odber.
-    - Do DB ulož info, že po skončení aktuálneho mesiaca sa prepne na tento nižší plán.
+## Úlohy pre Claude AI
 
-## 2. Zrušenie obnovy (api/user_actions.php)
-- Pri akcii `cancel_plan`:
-    - Musíš zavolať Stripe API a nastaviť `cancel_at_period_end = true` pre dané `stripe_subscription_id`. Týmto Stripe prestane sťahovať peniaze po skončení obdobia.
-    - V UI profilu (`profile_page.php`) po úspešnom zrušení **skry tlačidlo "Zrušiť plán"** a namiesto neho zobraz text: "Predplatné bude ukončené k [dátum]. Opätovná obnova je vypnutá."
+### 1. Úprava `auth/verify.php` (Human-in-the-loop)
+- **Zmena na dvojfázové overenie:**
+    - **GET požiadavka:** Nezmení stav v databáze. Iba overí, či token existuje a je platný. Ak áno, zobrazí jednoduchú, peknú stránku (v štýle projektu) s nápisom "Posledný krok k aktivácii" a veľkým tlačidlom **"Aktivovať môj účet"**.
+    - **POST požiadavka (po kliknutí na tlačidlo):** 
+        1. Vykoná sa skutočná verifikácia v DB (`is_verified = 1`, `verify_token = NULL`).
+        2. **DÔLEŽITÉ:** Nenastavuj session (neprihlasuj užívateľa automaticky).
+        3. Nastav flash správu "Účet bol úspešne aktivovaný. Teraz sa môžete prihlásiť."
+        4. Presmeruj užívateľa na `/login`.
+- **Resilience:** Ak je užívateľ už verifikovaný, presmeruj ho priamo na login s informáciou "Váš účet je už aktívny, môžete sa prihlásiť."
 
-## 3. Globálna kontrola expirácie (views/client_view.php & index.php)
-- Plány sa nesmú kontrolovať len pri logine.
-- V `index.php` (pred switchom) alebo v `config.php` pridaj globálnu kontrolu: Ak je prihlásený užívateľ a jeho `plan_ends_at` je v minulosti, zavolaj `applyPlanTransitionIfNeeded`.
-- V `views/client_view.php`: Ak majiteľovi menu vypršal plán a jeho menu prekračuje limity Free plánu (napr. má 5 kategórií), zobraziť návštevníkom správu: "Toto menu je dočasne nedostupné (Lockdown)."
+### 2. Hardening `auth/login.php`
+- Striktná kontrola `is_verified` pred prihlásením. Ak účet nie je overený, zobraziť jasnú chybu a neprihlásiť.
 
-## 4. Idempotencia Webhookov (api/payments/webhook.php)
-- Pri `checkout.session.completed` najprv skontroluj, či objednávka s daným `stripe_session_id` už nie je v stave `paid`. Ak áno, event ignoruj (ochrana proti duplicite).
-- Spracuj event `customer.subscription.updated`: Ak sa v Stripe zmení plán, aktualizuj `plan_name` a limity v našej DB.
+### 3. Hardening `config.php` (requireLogin)
+- V `requireLogin()` pridať poistku: Ak session tvrdí, že užívateľ je prihlásený, ale v DB má `is_verified = 0`, okamžite zničiť session (`session_destroy`) a presmerovať na login.
 
-## 5. UI Vylepšenia (views/plans_page.php)
-- Ak má užívateľ `next_plan_name` nastavený, zobraz mu pri danom pláne informáciu: "Tento plán sa aktivuje od [dátum]."
-- Ak užívateľ klikne na plán, ktorý už má, nič nerob (alebo zobraz toast "Tento plán už využívate").
+### 4. Úprava `auth/register.php`
+- Pred vložením nového užívateľa do DB zavolať `session_unset()` a `session_destroy()`, aby sme začali s "čistým štítom".
 
-## 6. Validácia IČ DPH (api/update_profile.php)
-- Pri ukladaní fakturačných údajov pridaj základnú kontrolu pre `ic_dph`: Musí začínať dvoma písmenami (napr. SK, CZ) a nasledovať číslicami (použi regex).
+## Technické detaily
+- **Dizajn verifikačnej stránky:** Použi Tailwind CSS cez CDN, Inter font, indigo-600 farbu a zaoblené rohy (`rounded-2xl`). Stránka by mala byť responzívna a vycentrovaná.
+- **Bezpečnosť:** Pre POST tlačidlo v `verify.php` stačí ako autorizácia samotný `token` (v URL alebo skrytom poli).
+
+Po dokončení zmien by mal byť flow takýto:
+1. Užívateľ klikne v maile na link.
+2. Uvidí stránku "Aktivujte svoj účet". (Scanner tu skončí).
+3. Užívateľ klikne na tlačidlo.
+4. Účet sa aktivuje v DB.
+5. Užívateľ je presmerovaný na prihlasovaciu stránku s úspešnou správou.
+6. Užívateľ sa manuálne prihlási.
+
+
