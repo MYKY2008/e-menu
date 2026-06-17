@@ -668,6 +668,10 @@ video {
   right: 1.25rem;
 }
 
+.right-\[3\.25rem\] {
+  right: 3.25rem;
+}
+
 .top-0 {
   top: 0px;
 }
@@ -3269,11 +3273,6 @@ video {
 .dark\:text-gray-300:is(.dark *) {
   --tw-text-opacity: 1;
   color: rgb(209 213 219 / var(--tw-text-opacity, 1));
-}
-
-.dark\:text-gray-400:is(.dark *) {
-  --tw-text-opacity: 1;
-  color: rgb(156 163 175 / var(--tw-text-opacity, 1));
 }
 
 .dark\:text-indigo-300:is(.dark *) {

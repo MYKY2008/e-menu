@@ -181,11 +181,6 @@ $AL = [
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
-<style>
-/* Dynamic accent color for active nav pill (PHP-injected) */
-.cat-pill{transition:all .2s}
-.cat-pill.active{background:<?= e($accentHex) ?> !important;color:<?= e($accentText) ?> !important}
-</style>
 </head>
 <body class="bg-gray-50 dark:bg-slate-950 min-h-screen client-bg">
 
@@ -209,6 +204,19 @@ $AL = [
 
       <!-- Gradient overlay for readability -->
       <div class="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/65 pointer-events-none"></div>
+
+      <!-- Search toggle -->
+      <button onclick="openSearch()" aria-label="Hľadať v menu"
+              class="absolute top-3 right-[3.25rem] z-20
+                     w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm
+                     border border-white/20 shadow
+                     flex items-center justify-center text-white
+                     transition-all duration-200 active:scale-90">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+      </button>
 
       <!-- Dark mode toggle top-right -->
       <button onclick="toggleDark()" aria-label="Prepnúť tmavý/svetlý režim"
@@ -263,6 +271,20 @@ $AL = [
     <!-- ── NO COVER: avatar-style header ───────────────────────── -->
     <div class="relative bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
 
+      <!-- Search toggle -->
+      <button onclick="openSearch()" aria-label="Hľadať v menu"
+              class="absolute top-3 right-[3.25rem] z-10
+                     w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800
+                     border border-gray-200 dark:border-slate-600 shadow-sm
+                     flex items-center justify-center
+                     text-gray-500 dark:text-slate-400
+                     transition-all duration-200 active:scale-90">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+      </button>
+
       <!-- Dark mode toggle top-right -->
       <button onclick="toggleDark()" aria-label="Prepnúť tmavý/svetlý režim"
               class="absolute top-3 right-3 z-10
@@ -315,42 +337,6 @@ $AL = [
     <?php endif; ?>
 
   </header>
-
-  <!-- ── STICKY CATEGORY NAV (domovský stav) ───────────────────────── -->
-  <?php if (!empty($categories)): ?>
-  <nav id="cat-nav"
-       class="sticky top-0 z-40 flex-shrink-0
-              bg-white/90 dark:bg-slate-900/90 backdrop-blur-md
-              border-b border-gray-100 dark:border-slate-800">
-    <div class="flex items-center">
-      <div class="flex-1 flex gap-1.5 overflow-x-auto no-scrollbar px-4 py-3">
-        <?php foreach ($categories as $cat): ?>
-        <button onclick="showCategory(<?= (int)$cat['id'] ?>, '<?= e(addslashes($cat['name'])) ?>')"
-                id="pill-<?= (int)$cat['id'] ?>"
-                class="cat-pill flex-none px-3.5 py-1.5 rounded-full
-                       text-xs font-semibold whitespace-nowrap
-                       text-gray-500 dark:text-gray-400
-                       hover:bg-gray-100 dark:hover:bg-slate-800
-                       transition-all duration-200">
-          <?= e($cat['icon']) ?> <?= e($cat['name']) ?>
-        </button>
-        <?php endforeach; ?>
-      </div>
-      <button onclick="openSearch()" aria-label="Hľadať v menu"
-              class="flex-shrink-0 w-9 h-9 mr-3 rounded-full
-                     bg-gray-100 dark:bg-slate-800
-                     flex items-center justify-center
-                     text-gray-500 dark:text-slate-400
-                     hover:bg-gray-200 dark:hover:bg-slate-700
-                     transition-all duration-200">
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-        </svg>
-      </button>
-    </div>
-  </nav>
-  <?php endif; ?>
 
   <!-- ── BACK BAR (kategória stav) ──────────────────────────────────── -->
   <div id="back-bar"
@@ -685,15 +671,9 @@ function refreshDarkIcon() {
 // ── Category navigation ────────────────────────────────────────────
 function showCategory(catId, catName) {
   // Swap nav ↔ back bar
-  document.getElementById('cat-nav')?.classList.add('hidden');
   const bar = document.getElementById('back-bar');
   bar.style.display = 'flex';
   document.getElementById('back-cat-name').textContent = catName;
-
-  // Highlight active pill
-  document.querySelectorAll('.cat-pill').forEach(p => {
-    p.classList.toggle('active', p.id === 'pill-' + catId);
-  });
 
   // Hide home, show cat-views
   document.getElementById('home-view').classList.add('hidden');
@@ -722,10 +702,6 @@ function showCategory(catId, catName) {
 function showHome() {
   // Swap back bar ↔ nav
   document.getElementById('back-bar').style.display = 'none';
-  document.getElementById('cat-nav')?.classList.remove('hidden');
-
-  // Clear active pill
-  document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
 
   // Hide cat-views, show home (with animation)
   document.getElementById('cat-views').classList.add('hidden');
@@ -826,7 +802,6 @@ function openSearch() {
   document.getElementById('home-view').classList.add('hidden');
   document.getElementById('cat-views').classList.add('hidden');
   document.getElementById('back-bar').style.display = 'none';
-  document.getElementById('cat-nav')?.classList.remove('hidden');
 }
 
 function closeSearch() {
