@@ -190,7 +190,21 @@ switch ($event['type'] ?? '') {
         $subId   = (string)($sub['id']     ?? '');
         $status  = (string)($sub['status'] ?? '');
 
-        if (!$subId || $status !== 'active') break;
+        if (!$subId) break;
+
+        $st = $db->prepare("SELECT id FROM users WHERE stripe_subscription_id = ?");
+        $st->execute([$subId]);
+        $user = $st->fetch();
+        if (!$user) break;
+
+        // Predplatné definitívne zrušené/nezaplatené — okamžitý downgrade
+        if (in_array($status, ['canceled', 'unpaid'], true)) {
+            $db->prepare(
+                "UPDATE users SET plan_name='free', max_venues=1, max_categories=3, max_items_per_cat=5,
+                 venue_limit=1, plan_ends_at=NULL, next_plan_name=NULL, stripe_subscription_id=NULL WHERE id=?"
+            )->execute([(int)$user['id']]);
+            break;
+        }
 
         $priceId = (string)($sub['items']['data'][0]['price']['id'] ?? '');
         if ($priceId === '') break;
@@ -205,22 +219,42 @@ switch ($event['type'] ?? '') {
         $planId = $priceMap[$priceId] ?? '';
         if ($planId === '') break;
 
-        $st = $db->prepare("SELECT id FROM users WHERE stripe_subscription_id = ?");
-        $st->execute([$subId]);
-        $user = $st->fetch();
-        if (!$user) break;
-
         [$maxV, $maxC, $maxI] = match($planId) {
             'ultra'  => [1, 20, 50],
             'pro'    => [1, 10, 25],
             default  => [1,  3,  5],
         };
-        $planEndsAt = date('Y-m-d\TH:i:s\Z', strtotime('+1 month'));
+
+        // current_period_end z reálneho Stripe predplatného, nie naivné "+1 month" od spracovania webhooku
+        $currentPeriodEnd = (int)($sub['current_period_end'] ?? 0);
+        $planEndsAt = $currentPeriodEnd
+            ? date('Y-m-d\TH:i:s\Z', $currentPeriodEnd)
+            : date('Y-m-d\TH:i:s\Z', strtotime('+1 month'));
+        $nextPlanName = !empty($sub['cancel_at_period_end']) ? 'free' : null;
 
         $db->prepare(
             "UPDATE users SET plan_name=?, max_venues=?, max_categories=?, max_items_per_cat=?,
-             venue_limit=?, plan_ends_at=?, next_plan_name=NULL WHERE id=?"
-        )->execute([$planId, $maxV, $maxC, $maxI, $maxV, $planEndsAt, (int)$user['id']]);
+             venue_limit=?, plan_ends_at=?, next_plan_name=? WHERE id=?"
+        )->execute([$planId, $maxV, $maxC, $maxI, $maxV, $planEndsAt, $nextPlanName, (int)$user['id']]);
+
+        break;
+    }
+
+    // ── Predplatné definitívne vymazané v Stripe ──────────────────
+    case 'customer.subscription.deleted': {
+        $sub   = $event['data']['object'] ?? [];
+        $subId = (string)($sub['id'] ?? '');
+        if (!$subId) break;
+
+        $st = $db->prepare("SELECT id FROM users WHERE stripe_subscription_id = ?");
+        $st->execute([$subId]);
+        $user = $st->fetch();
+        if (!$user) break;
+
+        $db->prepare(
+            "UPDATE users SET plan_name='free', max_venues=1, max_categories=3, max_items_per_cat=5,
+             venue_limit=1, plan_ends_at=NULL, next_plan_name=NULL, stripe_subscription_id=NULL WHERE id=?"
+        )->execute([(int)$user['id']]);
 
         break;
     }

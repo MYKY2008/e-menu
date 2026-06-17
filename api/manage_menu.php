@@ -379,6 +379,9 @@ try {
                 if (!$slug) throw new InvalidArgumentException('Chýba slug prevádzky.');
                 $verifyVenue($slug);
 
+                // Overiť vlastníctvo každej kategórie pred zápisom do DB
+                foreach ($ids as $id) { $getCategory($id); }
+
                 $db->beginTransaction();
                 $st = $db->prepare("UPDATE categories SET sort_order = ? WHERE id = ? AND venue_slug = ?");
                 foreach ($ids as $i => $id) { $st->execute([$i, $id, $slug]); }
@@ -388,8 +391,12 @@ try {
                 $targetCatId = isset($payload['target_category_id'])
                     ? (int)$payload['target_category_id'] : null;
 
-                $firstItem = $getItem($ids[0]);
-                $catRow    = $db->prepare("SELECT venue_slug FROM categories WHERE id = ?");
+                // Overiť vlastníctvo každého jedla pred akoukoľvek zmenou
+                $verifiedItems = [];
+                foreach ($ids as $id) { $verifiedItems[$id] = $getItem($id); }
+                $firstItem = $verifiedItems[$ids[0]];
+
+                $catRow = $db->prepare("SELECT venue_slug FROM categories WHERE id = ?");
                 $catRow->execute([$firstItem['category_id']]);
                 $slug = (string)$catRow->fetchColumn();
 
@@ -406,14 +413,11 @@ try {
                         "UPDATE items SET sort_order = :so, category_id = :cat_id WHERE id = :id"
                     );
                     foreach ($ids as $i => $id) {
-                        $getItem($id); // verify each item belongs to this user
                         $st->execute([':so' => $i, ':cat_id' => $targetCatId, ':id' => $id]);
                     }
                 } else {
-                    $st = $db->prepare(
-                        "UPDATE items SET sort_order = ? WHERE id = ? AND category_id = ?"
-                    );
-                    foreach ($ids as $i => $id) { $st->execute([$i, $id, $firstItem['category_id']]); }
+                    $st = $db->prepare("UPDATE items SET sort_order = ? WHERE id = ?");
+                    foreach ($ids as $i => $id) { $st->execute([$i, $id]); }
                 }
                 $db->commit();
                 $touchVenue($slug);

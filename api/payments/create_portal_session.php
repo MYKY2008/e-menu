@@ -38,6 +38,9 @@ if ($stripeKey === '') {
     exit;
 }
 
+$isLocalhost = str_contains(baseUrl(), 'localhost') || str_contains(baseUrl(), '127.0.0.1');
+$sslVerify   = !$isLocalhost;
+
 $db     = getDB();
 $userId = (int)$_SESSION['user_id'];
 
@@ -62,7 +65,7 @@ curl_setopt_array($ch, [
     CURLOPT_USERPWD        => $stripeKey . ':',
     CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
     CURLOPT_TIMEOUT        => 15,
-    CURLOPT_SSL_VERIFYPEER => false,
+    CURLOPT_SSL_VERIFYPEER => $sslVerify,
 ]);
 $response  = curl_exec($ch);
 $httpCode  = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);

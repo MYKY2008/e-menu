@@ -1,39 +1,56 @@
-# Fix "Too many redirects" a vylepšenie registrácie (Produkcia)
+# Odstránenie horných kategórií z klientskeho zobrazenia (GastroLink QR)
 
-## Problémy na vyriešenie
-1. **Too many redirects:** Spôsobené nekonečnou slučkou medzi `/dashboard` (ktorý vyžaduje verifikáciu a hádže na `/login`) a `/login` (ktorý vidí, že je užívateľ prihlásený a hádže ho na `/dashboard`). Slučka nastáva, ak je v session `user_id`, ale `is_verified` je prázdne.
-2. **Flow po registrácii:** Užívateľ by po registrácii nemal byť hodený na login, ale mal by zostať na stránke s jasným oznamom, že si má skontrolovať e-mail.
-3. **Hardening:** Zabezpečiť, aby neoverený užívateľ nemohol nič robiť v systéme.
+Tento prompt obsahuje inštrukcie pre úpravu klientskeho zobrazenia menu. Claude AI musí vykonať všetky úlohy uvedené nižšie a dbať na to, aby sa zachoval Tailwind dizajn, dark mode a Inter font.
+
+---
+
+## Cieľ úpravy
+V klientskom zobrazení lístka (`views/client_view.php`) momentálne zobrazujeme kategórie dvakrát na domovskej obrazovke – raz hore v podobe vodorovne scrollovateľných kapsulových tlačidiel (`#cat-nav`) a raz nižšie ako veľké dizajnové tlačidlá. Horné kapsuly sú zbytočné a zahlcujú mobilnú obrazovku.
+
+Chceme úplne odstrániť tieto horné kapsuly (`#cat-nav`), čím ušetríme cenné vertikálne miesto. Tlačidlo pre vyhľadávanie (lupa), ktoré bolo doteraz súčasťou tejto lišty, presunieme do hlavičky (headeru) priamo vedľa prepínača tmavého režimu (vľavo od neho).
+
+---
 
 ## Úlohy pre Claude AI
 
-### 1. Oprava redirect slučky v `index.php`
-- Uprav bloky `case $path === '/login'` a `case $path === '/register'`.
-- Presmerovanie na `/dashboard` sa má vykonať **LEN vtedy**, ak je užívateľ prihlásený **A ZÁROVEŇ** verifikovaný.
-- Teda zmeň `if (isLoggedIn())` na `if (isLoggedIn() && !empty($_SESSION['is_verified']))`.
+### 1. Úprava HTML v `views/client_view.php`
 
-### 2. Vylepšenie `auth/register.php`
-- Po úspešnom vytvorení účtu a odoslaní mailu:
-    - **NEMENIŤ** redirect na `/login`.
-    - Zmeň redirect na `header('Location: ' . url('register?success=1'));`.
-    - Predtým uisti sa, že flash správa je nastavená správne.
+- **Presunúť tlačidlo vyhľadávania (lupa) do hlavičky:**
+  - V súbore [client_view.php](file:///C:/Users/micha/Documents/Projects/EMENU/views/client_view.php) nájdite oba varianty headera:
+    1. **Variant s fotkou na pozadí (Cover photo)** — okolo riadku 201.
+    2. **Variant bez fotky (Avatar-style)** — okolo riadku 264.
+  - V oboch variantoch umiestnite nové okrúhle tlačidlo pre vyhľadávanie (lupa) vedľa tlačidla na zmenu tmavého režimu.
+  - Tlačidlo umiestnite vpravo hore s pozíciou `absolute top-3 right-[3.25rem]` (vľavo od tmavého prepínača, ktorý je na `right-3`).
+  - **Dizajn tlačidla vyhľadávania:**
+    - Vo variante **s cover fotkou** musí mať rovnaký štýl ako tmavý prepínač: okrúhle, `w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm border border-white/20 shadow flex items-center justify-center text-white transition-all active:scale-90`.
+    - Vo variante **bez cover fotky** musí mať tiež zodpovedajúci štýl: okrúhle, `w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 shadow-sm flex items-center justify-center text-gray-500 dark:text-slate-400 transition-all active:scale-90`.
+    - Tlačidlo po kliknutí vyvolá funkciu `openSearch()`.
+    - Použite rovnakú SVG ikonu lupy ako predtým.
 
-### 3. Úprava `views/register_page.php`
-- Na začiatku spracuj `$_GET['success']`.
-- Ak je `success == 1`, **Nezobrazuj registračný formulár**.
-- Namiesto formulára zobraz veľkú, peknú "Success" kartu s informáciou:
-    - "Registrácia bola úspešná!"
-    - "Na vašu adresu (zobraziť e-mail z flashu alebo old_input) sme odoslali aktivačný odkaz."
-    - "Prosím, skontrolujte si e-mail (aj priečinok SPAM) a aktivujte svoj účet."
-    - Tlačidlo "Späť na prihlásenie" vedúce na `/login`.
+- **Odstrániť navigačnú lištu `#cat-nav`:**
+  - Úplne vymažte element `<nav id="cat-nav" ...>` aj s celým jeho obsahom (približne riadky 320 až 353).
 
-### 4. Hardening `config.php`
-- Uisti sa, že `requireLogin()` je nepriestrelné a ak zistí v DB, že užívateľ nie je verifikovaný, natvrdo zavolá `session_destroy()` a hodí ho na `/login`. To už čiastočne máme, ale skontroluj logiku.
+- **Odstrániť nepoužívané CSS štýly:**
+  - Na začiatku HTML hlavičky vymažte CSS štýly pre triedu `.cat-pill` a `.cat-pill.active` (približne riadky 185 až 188).
 
-### 5. SMTP a APP_URL (Kontrola)
-- V `config.php` v `baseUrl()` funkcii skontroluj, či sa správne používa `$_ENV['APP_URL']`.
-- **Dôležité upozornenie pre užívateľa:** Pripomeň mu, že v produkčnom `.env` musí mať `APP_URL=https://emenu.myky.cz` (povinné HTTPS) a správne SMTP údaje, inak maily nebudú odchádzať.
+### 2. Úprava JavaScriptu v `views/client_view.php`
 
-## Technické detaily
-- Zachovaj Tailwind štýl, indigo-600 akcent a zaoblené rohy.
-- Kód musí byť čistý, bez zbytočných komentárov.
+- **Vyčistiť funkciu `showCategory()`:**
+  - Odstráňte riadok skrývajúci `#cat-nav`: `document.getElementById('cat-nav')?.classList.add('hidden');`.
+  - Odstráňte kód, ktorý prepína aktívnu triedu na `.cat-pill` (riadky 693 až 696).
+
+- **Vyčistiť funkciu `showHome()`:**
+  - Odstráňte riadok zobrazujúci `#cat-nav`: `document.getElementById('cat-nav')?.classList.remove('hidden');`.
+  - Odstráňte kód, ktorý odoberá aktívnu triedu z `.cat-pill` (riadok 728).
+
+- **Vyčistiť funkciu `openSearch()`:**
+  - Odstráňte riadok: `document.getElementById('cat-nav')?.classList.remove('hidden');` (približne riadok 829).
+
+---
+
+## Overenie funkčnosti
+
+1. Otvorte klientske zobrazenie menu a overte, že sa na domovskej obrazovke už nezobrazujú horné kapsulové kategórie.
+2. Skontrolujte, že v hlavičke (s cover fotkou aj bez nej) pribudla vedľa mesiaca/slnka (prepínač tmavého režimu) ikona lupy.
+3. Kliknite na lupu a overte, že vyhľadávanie funguje bez chýb a dá sa zavrieť.
+4. Kliknite na ktorúkoľvek kategóriu na domovskej obrazovke a overte, že sa zobrazí zoznam jedál a tlačidlo "Späť", ktoré vás správne vráti na domovskú obrazovku.

@@ -45,6 +45,9 @@ if ($stripeKey === '') {
     exit;
 }
 
+$isLocalhost = str_contains(baseUrl(), 'localhost') || str_contains(baseUrl(), '127.0.0.1');
+$sslVerify   = !$isLocalhost;
+
 $priceIds = [
     'pro'    => $_ENV['STRIPE_PRICE_PRO']    ?? '',
     'ultra'  => $_ENV['STRIPE_PRICE_ULTRA']  ?? '',
@@ -80,7 +83,7 @@ if ($existSubId !== '' && $existCustId !== '') {
         CURLOPT_USERPWD        => $stripeKey . ':',
         CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
         CURLOPT_TIMEOUT        => 15,
-        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYPEER => $sslVerify,
     ]);
     $portalResp = curl_exec($portalCh);
     $portalCode = (int)curl_getinfo($portalCh, CURLINFO_HTTP_CODE);
@@ -121,7 +124,7 @@ curl_setopt_array($ch, [
     CURLOPT_USERPWD        => $stripeKey . ':',
     CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
     CURLOPT_TIMEOUT        => 15,
-    CURLOPT_SSL_VERIFYPEER => false,
+    CURLOPT_SSL_VERIFYPEER => $sslVerify,
 ]);
 $response  = curl_exec($ch);
 $httpCode  = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);

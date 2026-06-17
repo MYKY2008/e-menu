@@ -469,7 +469,7 @@ function applyPlanTransitionIfNeeded(PDO $db, int $userId): void {
         };
         $db->prepare(
             "UPDATE users SET plan_name=?, max_venues=?, max_categories=?, max_items_per_cat=?,
-             venue_limit=?, plan_ends_at=NULL, next_plan_name=NULL WHERE id=?"
+             venue_limit=?, plan_ends_at=NULL, next_plan_name=NULL, stripe_subscription_id=NULL WHERE id=?"
         )->execute([$next, $maxV, $maxC, $maxI, $maxV, $userId]);
     }
 }

@@ -26,6 +26,9 @@ try {
     $userId = (int)$_SESSION['user_id'];
     $action = (string)($payload['action'] ?? '');
 
+    $isLocalhost = str_contains(baseUrl(), 'localhost') || str_contains(baseUrl(), '127.0.0.1');
+    $sslVerify   = !$isLocalhost;
+
     switch ($action) {
 
         case 'cancel_plan': {
@@ -54,7 +57,7 @@ try {
                         CURLOPT_USERPWD        => $stripeKey . ':',
                         CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
                         CURLOPT_TIMEOUT        => 10,
-                        CURLOPT_SSL_VERIFYPEER => false,
+                        CURLOPT_SSL_VERIFYPEER => $sslVerify,
                     ]);
                     $sResp = curl_exec($ch);
                     $sCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);

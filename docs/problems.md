@@ -9,7 +9,7 @@ Tento dokument slúži ako roadmapa pre opravy a hardening projektu pred ostrým
 - [x] **Session Re-regeneration:** ✅ Hotové
 - [x] **Verifikácia registrácie:** Vyriešené cez Human-in-the-loop (POST tlačidlo) a hardening `requireLogin`. ✅
 - [x] **Stripe SSL Verifikácia:** Vrátené `CURLOPT_SSL_VERIFYPEER` na `true`. ✅
-- [ ] **Ownership Hardening (manage_menu.php):** Pridať kontrolu vlastníctva pre každé ID v hromadných operáciách (reorder).
+- [x] **Ownership Hardening (manage_menu.php):** Pridať kontrolu vlastníctva pre každé ID v hromadných operáciách (reorder). ✅
 - [ ] **VPS Prod Setup:** Skontrolovať produkčný `.env` (APP_URL musí byť https, SMTP funkčnosť, Stripe Signing Secret) a nastaviť správne práva (www-data) pre `storage/` a `uploads/`.
 
 ## 🟡 2. Biznis Logika, Platby a Legislatíva
