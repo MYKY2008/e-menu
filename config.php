@@ -167,6 +167,8 @@ function getDB(): PDO {
         "ALTER TABLE users ADD COLUMN stripe_customer_id TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT DEFAULT NULL",
         "ALTER TABLE venue_settings ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'",
+        "ALTER TABLE venues ADD COLUMN facebook_url TEXT DEFAULT NULL",
+        "ALTER TABLE venues ADD COLUMN tiktok_url TEXT DEFAULT NULL",
     ];
     foreach ($migrations as $sql) {
         try { $pdo->exec($sql); } catch (PDOException $ignored) {}

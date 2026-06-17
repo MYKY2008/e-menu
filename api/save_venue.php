@@ -78,7 +78,13 @@ try {
         throw new InvalidArgumentException('Názov podniku je príliš dlhý (max 100 znakov).');
     }
 
-    $urlFields = ['menu_url' => 'Jedálny lístok', 'google_url' => 'Google Recenzie', 'instagram_url' => 'Instagram'];
+    $urlFields = [
+        'menu_url'      => 'Jedálny lístok',
+        'google_url'    => 'Google Recenzie',
+        'instagram_url' => 'Instagram',
+        'facebook_url'  => 'Facebook',
+        'tiktok_url'    => 'TikTok',
+    ];
     foreach ($urlFields as $field => $label) {
         $u = trim($payload[$field] ?? '');
         if ($u !== '' && !isValidUrl($u)) {
@@ -91,6 +97,8 @@ try {
     $menu  = trim($payload['menu_url']      ?? '') ?: null;
     $goog  = trim($payload['google_url']    ?? '') ?: null;
     $insta = trim($payload['instagram_url'] ?? '') ?: null;
+    $fb    = trim($payload['facebook_url']  ?? '') ?: null;
+    $tt    = trim($payload['tiktok_url']    ?? '') ?: null;
 
     $isNew = ($originalSlug === '');
 
@@ -191,13 +199,14 @@ try {
             try {
                 $db->prepare("UPDATE venues
                     SET slug=:slug, name=:name, menu_url=:menu, google_url=:goog,
-                        instagram_url=:insta, color=:color, logo=:logo, cover_image=:cover,
+                        instagram_url=:insta, facebook_url=:fb, tiktok_url=:tt,
+                        color=:color, logo=:logo, cover_image=:cover,
                         updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
                     WHERE slug=:orig")
                    ->execute([
                        ':slug'=>$slug, ':name'=>$name, ':menu'=>$menu,
-                       ':goog'=>$goog, ':insta'=>$insta, ':color'=>$color,
-                       ':logo'=>$logo, ':cover'=>$cover, ':orig'=>$originalSlug,
+                       ':goog'=>$goog, ':insta'=>$insta, ':fb'=>$fb, ':tt'=>$tt,
+                       ':color'=>$color, ':logo'=>$logo, ':cover'=>$cover, ':orig'=>$originalSlug,
                    ]);
                 foreach (['categories', 'venue_settings', 'scans'] as $tbl) {
                     $db->prepare("UPDATE $tbl SET venue_slug = :new WHERE venue_slug = :old")
@@ -214,16 +223,17 @@ try {
             // Upsert (insert new or update same-slug)
             $ownerId = $isNew ? $userId : (int)($existing['user_id'] ?? $userId);
             $db->prepare("
-                INSERT INTO venues (slug, user_id, name, menu_url, google_url, instagram_url, color, logo, cover_image)
-                VALUES (:slug, :uid, :name, :menu, :goog, :insta, :color, :logo, :cover)
+                INSERT INTO venues (slug, user_id, name, menu_url, google_url, instagram_url, facebook_url, tiktok_url, color, logo, cover_image)
+                VALUES (:slug, :uid, :name, :menu, :goog, :insta, :fb, :tt, :color, :logo, :cover)
                 ON CONFLICT(slug) DO UPDATE SET
                     name=excluded.name, menu_url=excluded.menu_url,
                     google_url=excluded.google_url, instagram_url=excluded.instagram_url,
+                    facebook_url=excluded.facebook_url, tiktok_url=excluded.tiktok_url,
                     color=excluded.color, logo=excluded.logo, cover_image=excluded.cover_image,
                     updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
             ")->execute([
                 ':slug'=>$slug, ':uid'=>$ownerId, ':name'=>$name,
-                ':menu'=>$menu, ':goog'=>$goog, ':insta'=>$insta,
+                ':menu'=>$menu, ':goog'=>$goog, ':insta'=>$insta, ':fb'=>$fb, ':tt'=>$tt,
                 ':color'=>$color, ':logo'=>$logo, ':cover'=>$cover,
             ]);
             if ($isNew) $db->commit();

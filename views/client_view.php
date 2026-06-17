@@ -130,6 +130,8 @@ $ogImage    = ($ogImageRaw && !str_starts_with($ogImageRaw, 'data:'))
 $quickActions = [];
 if (!empty($venue['google_url']))    $quickActions[] = ['url'=>$venue['google_url'],    'emoji'=>'⭐','label'=>'Google'];
 if (!empty($venue['instagram_url'])) $quickActions[] = ['url'=>$venue['instagram_url'], 'emoji'=>'📷','label'=>'Instagram'];
+if (!empty($venue['facebook_url']))  $quickActions[] = ['url'=>$venue['facebook_url'],  'emoji'=>'👥','label'=>'Facebook'];
+if (!empty($venue['tiktok_url']))    $quickActions[] = ['url'=>$venue['tiktok_url'],    'emoji'=>'🎵','label'=>'TikTok'];
 
 $AL = [
     1  => 'Obilniny obsahujúce lepok (pšenica, raž, jačmeň, ovos...)',

@@ -1,56 +1,72 @@
-# Odstránenie horných kategórií z klientskeho zobrazenia (GastroLink QR)
+# Dynamické rýchle odkazy pre prevádzku (GastroLink QR)
 
-Tento prompt obsahuje inštrukcie pre úpravu klientskeho zobrazenia menu. Claude AI musí vykonať všetky úlohy uvedené nižšie a dbať na to, aby sa zachoval Tailwind dizajn, dark mode a Inter font.
+Tento prompt obsahuje inštrukcie pre pridanie dynamických rýchlych odkazov pre prevádzky (Google Recenzie, Instagram, Facebook, TikTok). Claude AI musí vykonať všetky úlohy uvedené nižšie a dbať na zachovanie strict_types, Tailwind dizajnu a Inter fontu.
 
 ---
 
 ## Cieľ úpravy
-V klientskom zobrazení lístka (`views/client_view.php`) momentálne zobrazujeme kategórie dvakrát na domovskej obrazovke – raz hore v podobe vodorovne scrollovateľných kapsulových tlačidiel (`#cat-nav`) a raz nižšie ako veľké dizajnové tlačidlá. Horné kapsuly sú zbytočné a zahlcujú mobilnú obrazovku.
+Namiesto dvoch fixne zobrazených textových polí pre Google Recenzie a Instagram chceme dať majiteľovi prevádzky možnosť vybrať si pomocou checkboxov, ktoré odkazy chce na svojom menu zobraziť. Na výber budú štyri možnosti:
+- **Google Recenzie** (stĺpec `google_url`)
+- **Instagram** (stĺpec `instagram_url`)
+- **Facebook** (stĺpec `facebook_url` — nový stĺpec)
+- **TikTok** (stĺpec `tiktok_url` — nový stĺpec)
 
-Chceme úplne odstrániť tieto horné kapsuly (`#cat-nav`), čím ušetríme cenné vertikálne miesto. Tlačidlo pre vyhľadávanie (lupa), ktoré bolo doteraz súčasťou tejto lišty, presunieme do hlavičky (headeru) priamo vedľa prepínača tmavého režimu (vľavo od neho).
+Keď majiteľ v admin paneli začiarkne príslušný checkbox, pod ním sa zobrazí textové pole pre zadanie danej URL. Ak checkbox odčiarkne, textové pole sa schová a jeho hodnota sa vymaže. Na verejnom menu zákazníka sa zobrazia iba tie rýchle odkazy, ktoré sú začiarknuté a vyplnené.
 
 ---
 
 ## Úlohy pre Claude AI
 
-### 1. Úprava HTML v `views/client_view.php`
+### 1. Databázová migrácia v `config.php`
+- V súbore [config.php](file:///C:/Users/micha/Documents/Projects/EMENU/config.php) pridajte do poľa `$migrations` (okolo riadku 170) dva nové SQL príkazy na pridanie stĺpcov pre Facebook a TikTok:
+  ```php
+  "ALTER TABLE venues ADD COLUMN facebook_url TEXT DEFAULT NULL",
+  "ALTER TABLE venues ADD COLUMN tiktok_url TEXT DEFAULT NULL",
+  ```
 
-- **Presunúť tlačidlo vyhľadávania (lupa) do hlavičky:**
-  - V súbore [client_view.php](file:///C:/Users/micha/Documents/Projects/EMENU/views/client_view.php) nájdite oba varianty headera:
-    1. **Variant s fotkou na pozadí (Cover photo)** — okolo riadku 201.
-    2. **Variant bez fotky (Avatar-style)** — okolo riadku 264.
-  - V oboch variantoch umiestnite nové okrúhle tlačidlo pre vyhľadávanie (lupa) vedľa tlačidla na zmenu tmavého režimu.
-  - Tlačidlo umiestnite vpravo hore s pozíciou `absolute top-3 right-[3.25rem]` (vľavo od tmavého prepínača, ktorý je na `right-3`).
-  - **Dizajn tlačidla vyhľadávania:**
-    - Vo variante **s cover fotkou** musí mať rovnaký štýl ako tmavý prepínač: okrúhle, `w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm border border-white/20 shadow flex items-center justify-center text-white transition-all active:scale-90`.
-    - Vo variante **bez cover fotky** musí mať tiež zodpovedajúci štýl: okrúhle, `w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-600 shadow-sm flex items-center justify-center text-gray-500 dark:text-slate-400 transition-all active:scale-90`.
-    - Tlačidlo po kliknutí vyvolá funkciu `openSearch()`.
-    - Použite rovnakú SVG ikonu lupy ako predtým.
+### 2. Úprava backendu v `api/save_venue.php`
+- V súbore [save_venue.php](file:///C:/Users/micha/Documents/Projects/EMENU/api/save_venue.php):
+  - Rozšírte pole `$urlFields` (riadok 81) o `'facebook_url' => 'Facebook'` a `'tiktok_url' => 'TikTok'`.
+  - Spracujte nové premenné z payloadu:
+    ```php
+    $fb = trim($payload['facebook_url'] ?? '') ?: null;
+    $tt = trim($payload['tiktok_url'] ?? '') ?: null;
+    ```
+  - Upravte SQL UPDATE dopyt pre zmenu slugu (okolo riadku 192) a SQL INSERT/UPDATE dopyt (okolo riadku 217) tak, aby sa ukladali a aktualizovali aj stĺpce `facebook_url` a `tiktok_url`.
 
-- **Odstrániť navigačnú lištu `#cat-nav`:**
-  - Úplne vymažte element `<nav id="cat-nav" ...>` aj s celým jeho obsahom (približne riadky 320 až 353).
+### 3. Úprava admin panelu v `views/dashboard.php`
+- **Úprava HTML formulára (okolo riadku 307):**
+  - Nahraďte pôvodný cyklus pre Google a Instagram novou sekciou pre rýchle odkazy.
+  - Vytvorte grid s 2 stĺpcami pre checkboxy:
+    - Kľúče a popis: `google` (Google Recenzie), `insta` (Instagram), `facebook` (Facebook), `tiktok` (TikTok).
+    - Každý checkbox bude mať ID vo formáte `f-check-{key}` a bude volať `onchange="toggleLinkInput('{key}')"`.
+    - Checkbox bude označený ako `checked`, ak príslušný stĺpec v `$selected` nie je prázdny.
+  - Vytvorte kontajnery pre textové vstupy pod checkboxmi.
+    - Každý kontajner bude mať ID `wrap-{key}` a triedu `hidden`, ak je hodnota prázdna.
+    - Textové vstupy (inputs) budú mať ID `f-google`, `f-insta`, `f-facebook`, `f-tiktok`.
+    - Použite moderný Tailwind vzhľad ladiaci s [docs/dizajn.md](file:///C:/Users/micha/Documents/Projects/EMENU/docs/dizajn.md).
+- **Pridať JS funkciu `toggleLinkInput(key)`:**
+  - Ak je checkbox `f-check-{key}` začiarknutý, odoberte triedu `hidden` z elementu `wrap-{key}`.
+  - Ak je odčiarknutý, pridajte triedu `hidden` na `wrap-{key}` a vymažte hodnotu (value) príslušného textového poľa.
+- **Úprava funkcie `saveVenue()`:**
+  - Do odosielaného payloadu pridajte `facebook_url` a `tiktok_url`.
+  - Hodnota URL sa pošle iba vtedy, ak je príslušný checkbox začiarknutý (inak pošlite prázdny reťazec).
+- **Úprava funkcie `openNewVenue()`:**
+  - Zabezpečte vyčistenie nových polí `f-facebook` a `f-tiktok`.
+  - Odčiarknite všetky štyri checkboxy a skryte ich kontajnery pridaním triedy `hidden`.
 
-- **Odstrániť nepoužívané CSS štýly:**
-  - Na začiatku HTML hlavičky vymažte CSS štýly pre triedu `.cat-pill` a `.cat-pill.active` (približne riadky 185 až 188).
-
-### 2. Úprava JavaScriptu v `views/client_view.php`
-
-- **Vyčistiť funkciu `showCategory()`:**
-  - Odstráňte riadok skrývajúci `#cat-nav`: `document.getElementById('cat-nav')?.classList.add('hidden');`.
-  - Odstráňte kód, ktorý prepína aktívnu triedu na `.cat-pill` (riadky 693 až 696).
-
-- **Vyčistiť funkciu `showHome()`:**
-  - Odstráňte riadok zobrazujúci `#cat-nav`: `document.getElementById('cat-nav')?.classList.remove('hidden');`.
-  - Odstráňte kód, ktorý odoberá aktívnu triedu z `.cat-pill` (riadok 728).
-
-- **Vyčistiť funkciu `openSearch()`:**
-  - Odstráňte riadok: `document.getElementById('cat-nav')?.classList.remove('hidden');` (približne riadok 829).
+### 4. Úprava verejného menu v `views/client_view.php`
+- V súbore [client_view.php](file:///C:/Users/micha/Documents/Projects/EMENU/views/client_view.php) upravte plnenie poľa `$quickActions` (okolo riadku 130) tak, aby zahŕňalo aj Facebook a TikTok, ak sú vyplnené v DB:
+  - Google: emoji `⭐`, label `Google`
+  - Instagram: emoji `📷`, label `Instagram`
+  - Facebook: emoji `👥`, label `Facebook`
+  - TikTok: emoji `🎵`, label `TikTok`
 
 ---
 
 ## Overenie funkčnosti
-
-1. Otvorte klientske zobrazenie menu a overte, že sa na domovskej obrazovke už nezobrazujú horné kapsulové kategórie.
-2. Skontrolujte, že v hlavičke (s cover fotkou aj bez nej) pribudla vedľa mesiaca/slnka (prepínač tmavého režimu) ikona lupy.
-3. Kliknite na lupu a overte, že vyhľadávanie funguje bez chýb a dá sa zavrieť.
-4. Kliknite na ktorúkoľvek kategóriu na domovskej obrazovke a overte, že sa zobrazí zoznam jedál a tlačidlo "Späť", ktoré vás správne vráti na domovskú obrazovku.
+1. Otvorte admin panel a v editácii prevádzky overte, že sa zobrazujú checkboxy pre Google, Instagram, Facebook a TikTok.
+2. Začiarknite Facebook a TikTok a overte, že sa pod nimi zobrazia vstupné polia pre zadanie URL.
+3. Vyplňte testovacie adresy a uložte prevádzku.
+4. Overte v databáze alebo opätovným načítaním stránky, že sa hodnoty správne uložili.
+5. Otvorte klientske menu prevádzky a skontrolujte, že sa v hlavičke zobrazia správne ikony rýchlych odkazov pre všetky štyri typy sietí.

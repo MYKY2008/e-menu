@@ -304,20 +304,45 @@ $EU_ALLERGENS = [
                    oninput="updatePreview()">
           </div>
 
-          <!-- URL fields (Google + Instagram) -->
-          <?php foreach ([
-              ['f-google', 'Google Recenzie (URL)', $selected['google_url']    ?? ''],
-              ['f-insta',  'Instagram (URL)',        $selected['instagram_url'] ?? ''],
-          ] as [$fid, $label, $val]): ?>
+          <!-- Quick links (Google, Instagram, Facebook, TikTok) -->
           <div>
-            <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block"><?= $label ?></label>
-            <input id="<?= $fid ?>" type="url"
-                   class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm
-                          text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-                   value="<?= e($val) ?>" placeholder="https://"
-                   oninput="updatePreview()">
+            <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">Rýchle odkazy</label>
+            <?php
+            $quickLinkDefs = [
+                'google'   => ['label' => 'Google Recenzie', 'field' => 'google_url'],
+                'insta'    => ['label' => 'Instagram',        'field' => 'instagram_url'],
+                'facebook' => ['label' => 'Facebook',          'field' => 'facebook_url'],
+                'tiktok'   => ['label' => 'TikTok',            'field' => 'tiktok_url'],
+            ];
+            ?>
+            <div class="grid grid-cols-2 gap-3">
+              <?php foreach ($quickLinkDefs as $key => $def): $val = trim((string)($selected[$def['field']] ?? '')); ?>
+              <div>
+                <label class="flex items-center gap-2 cursor-pointer select-none p-2.5 rounded-xl
+                              border border-gray-100 dark:border-slate-700
+                              hover:bg-gray-50 dark:hover:bg-slate-800 transition">
+                  <span class="gl-cb">
+                    <input type="checkbox" id="f-check-<?= e($key) ?>" <?= $val !== '' ? 'checked' : '' ?>
+                           onchange="toggleLinkInput('<?= e($key) ?>')">
+                    <span class="gl-cb-box">
+                      <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                        <path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </span>
+                  </span>
+                  <span class="text-xs font-semibold text-slate-700 dark:text-slate-300"><?= e($def['label']) ?></span>
+                </label>
+                <div id="wrap-<?= e($key) ?>" class="<?= $val === '' ? 'hidden' : '' ?> mt-1.5">
+                  <input id="f-<?= e($key) ?>" type="url"
+                         class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-xl px-3 py-2 text-xs
+                                text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+                         value="<?= e($val) ?>" placeholder="https://"
+                         oninput="updatePreview()">
+                </div>
+              </div>
+              <?php endforeach; ?>
+            </div>
           </div>
-          <?php endforeach; ?>
 
         </div>
       </div>
@@ -1560,6 +1585,19 @@ function confirmSlugModal() {
   });
 }
 
+function toggleLinkInput(key) {
+  const checkbox = document.getElementById('f-check-' + key);
+  const wrap     = document.getElementById('wrap-' + key);
+  const input    = document.getElementById('f-' + key);
+  if (!checkbox || !wrap) return;
+  if (checkbox.checked) {
+    wrap.classList.remove('hidden');
+  } else {
+    wrap.classList.add('hidden');
+    if (input) input.value = '';
+  }
+}
+
 async function saveVenue() {
   const originalSlug = document.getElementById('f-original-slug').value;
   const newSlug      = document.getElementById('f-slug').value.trim();
@@ -1574,8 +1612,10 @@ async function saveVenue() {
     original_slug: originalSlug,
     slug:          newSlug,
     name:          document.getElementById('f-name').value.trim(),
-    google_url:    document.getElementById('f-google').value.trim(),
-    instagram_url: document.getElementById('f-insta').value.trim(),
+    google_url:    document.getElementById('f-check-google').checked   ? document.getElementById('f-google').value.trim()   : '',
+    instagram_url: document.getElementById('f-check-insta').checked    ? document.getElementById('f-insta').value.trim()    : '',
+    facebook_url:  document.getElementById('f-check-facebook').checked ? document.getElementById('f-facebook').value.trim() : '',
+    tiktok_url:    document.getElementById('f-check-tiktok').checked   ? document.getElementById('f-tiktok').value.trim()   : '',
     color:         document.getElementById('f-color').value,
     logo:          document.getElementById('f-logo').value,
     cover_image:   document.getElementById('f-cover').value,
@@ -1656,8 +1696,13 @@ async function deleteVenue(slug) {
 }
 
 function openNewVenue() {
-  ['f-original-slug','f-slug','f-name','f-google','f-insta','f-logo','f-cover'].forEach(id => {
+  ['f-original-slug','f-slug','f-name','f-google','f-insta','f-facebook','f-tiktok','f-logo','f-cover'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['google','insta','facebook','tiktok'].forEach(key => {
+    const checkbox = document.getElementById('f-check-' + key);
+    if (checkbox) checkbox.checked = false;
+    document.getElementById('wrap-' + key)?.classList.add('hidden');
   });
   const logoFile = document.getElementById('f-logo-file');
   if (logoFile) logoFile.value = '';
