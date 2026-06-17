@@ -399,7 +399,7 @@ $EU_ALLERGENS = [
                           file:text-indigo-700 dark:file:text-indigo-400
                           hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50">
             <input type="hidden" id="f-logo"
-                   value="<?= ($selected&&$selected['logo']) ? e(imgUrl($selected['logo'])) : '' ?>">
+                   value="<?= ($selected&&$selected['logo']) ? e($selected['logo']) : '' ?>">
             <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
               Max 512 KB · automaticky orezané na 256 × 256 px
             </p>
@@ -428,7 +428,7 @@ $EU_ALLERGENS = [
                           file:text-indigo-700 dark:file:text-indigo-400
                           hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/50">
             <input type="hidden" id="f-cover"
-                   value="<?= ($selected && !empty($selected['cover_image'])) ? e(imgUrl($selected['cover_image'])) : '' ?>">
+                   value="<?= ($selected && !empty($selected['cover_image'])) ? e($selected['cover_image']) : '' ?>">
             <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
               Max 1 MB · automaticky orezané na 1200 × 400 px (3:1)
             </p>

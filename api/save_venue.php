@@ -117,6 +117,14 @@ try {
 
     // ── Logo processing ───────────────────────────────────────
     $rawLogo = $payload['logo'] ?? null;
+    // Defensive: normalize an absolute URL back to the stored relative path
+    // (e.g. stale client sending imgUrl()-prefixed value) so it never gets persisted as-is.
+    if (is_string($rawLogo) && !str_starts_with($rawLogo, 'data:image')) {
+        $appPrefix = rtrim(baseUrl(), '/') . '/';
+        if (str_starts_with($rawLogo, $appPrefix)) {
+            $rawLogo = substr($rawLogo, strlen($appPrefix));
+        }
+    }
     if (!is_string($rawLogo) || $rawLogo === '') {
         deleteImageFile($currentLogo);
         $logo = null;
@@ -135,6 +143,12 @@ try {
 
     // ── Cover image processing ────────────────────────────────
     $rawCover = $payload['cover_image'] ?? null;
+    if (is_string($rawCover) && !str_starts_with($rawCover, 'data:image')) {
+        $appPrefix = rtrim(baseUrl(), '/') . '/';
+        if (str_starts_with($rawCover, $appPrefix)) {
+            $rawCover = substr($rawCover, strlen($appPrefix));
+        }
+    }
     if (!is_string($rawCover) || $rawCover === '') {
         deleteImageFile($currentCover);
         $cover = null;
